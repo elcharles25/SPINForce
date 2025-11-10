@@ -7,7 +7,7 @@ spimforce/node_modules/
 spimforce-installer/node_modules/
 
 # Archivo temporales del inbox
-spimforce-installer/backend/temp
+spimforce-installer/backend/temp/
 
 # Variables de entorno (contiene API keys privadas)
 spimforce/.env
