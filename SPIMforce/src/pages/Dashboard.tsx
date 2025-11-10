@@ -437,7 +437,7 @@ const Dashboard = () => {
           pending: pendingDistributions,
           subscribedContacts: webinarsSubscribedCount,
         },
-        recentActivity: recentActivity.slice(0, 11),
+        recentActivity: recentActivity.slice(0, 5),
       });
     } catch (error) {
       console.error("Error loading dashboard metrics:", error);
@@ -458,100 +458,6 @@ const Dashboard = () => {
     'Cerrada ganada',
     'Cerrada perdida'
   ];
-
-  const prepareChartData = () => {
-    if (!replyRateByTemplate || replyRateByTemplate.length === 0) {
-      return null;
-    }
-
-    const labels = replyRateByTemplate.map(t => t.templateName);
-    const repliedData = replyRateByTemplate.map(t => t.replied);
-    const notRepliedData = replyRateByTemplate.map(t => t.total - t.replied);
-
-    return {
-      labels,
-      datasets: [
-        {
-          label: "Respondida",
-          data: repliedData,
-          backgroundColor: "mediumseagreen",
-          borderColor: "mediumseagreen",
-          borderWidth: 1,
-        },
-        {
-          label: "Sin respuesta",
-          data: notRepliedData,
-          backgroundColor: "rgba(143, 143, 143, 0.8)",
-          borderColor: "rgba(143, 143, 143, 0.8)",
-          borderWidth: 1,
-        },
-      ],
-    };
-  };
-
-  const chartOptions: ChartOptions<"bar"> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      title: {
-        display: false,
-      },
-      legend: {
-        position: "bottom" as const,
-        labels: {
-          padding: 15,
-          font: {
-            size: 12,
-          },
-        },
-      },
-      tooltip: {
-        callbacks: {
-          label: function(context) {
-            const label = context.dataset.label || '';
-            const value = context.parsed.y;
-            const dataIndex = context.dataIndex;
-            
-            const replied = context.chart.data.datasets[0].data[dataIndex] as number;
-            const notReplied = context.chart.data.datasets[1].data[dataIndex] as number;
-            const total = replied + notReplied;
-            
-            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-            
-            return `${label}: ${value} (${percentage}%)`;
-          }
-        }
-      }
-    },
-    scales: {
-      x: {
-        stacked: true,
-        grid: {
-          display: false,
-        },
-        ticks: {
-          font: {
-            size: 11,
-          },
-        },
-      },
-      y: {
-        stacked: true,
-        beginAtZero: true,
-        grid: {
-          color: "rgba(0, 0, 0, 0.05)",
-        },
-        ticks: {
-          stepSize: 1,
-          font: {
-            size: 11,
-          },
-        },
-      },
-    },
-  };
-
-  const chartData = prepareChartData();
 
   if (loading) {
     return (
@@ -766,18 +672,6 @@ const Dashboard = () => {
                       <div className="text-xs text-muted-foreground mt-1">Emails promedio</div>
                     </div>
                   </div>
-
-                  {chartData && (
-                    <div className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
-                      <h4 className="text-sm font-semibold mb-4 text-center text-slate-700">
-                        Respuestas por Tipo de Campaña
-                      </h4>
-                      <div className="h-64">
-                        <Bar data={chartData} options={chartOptions} />
-                      </div>
-                    </div>
-                  )}
-
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1075,7 +969,6 @@ const Dashboard = () => {
                   <Mail className="h-5 w-5 text-indigo-600" />
                   Tasa de Respuesta por Tipo de Campaña
                 </h3>
-
                 {replyRateByTemplate.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
                     No hay datos de campañas disponibles
@@ -1120,7 +1013,6 @@ const Dashboard = () => {
                   <Users className="h-5 w-5 text-indigo-600" />
                   Tasa de Respuesta por Rol
                 </h3>
-
                 {replyRateByRole.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
                     No hay datos de roles disponibles
