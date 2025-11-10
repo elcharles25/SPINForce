@@ -666,7 +666,7 @@ const Dashboard = () => {
                   {metrics.campaigns.replied} respondidas
                 </Badge>
                 <Badge variant="outline" className="text-xs bg-red-100 border-red-200">
-                  {metrics.campaigns.bounced} emails incorrectos
+                  {metrics.campaigns.bounced} emails erróneos
                 </Badge>
               </div>
             </CardContent>
@@ -824,7 +824,7 @@ const Dashboard = () => {
                     <div className="flex items-center justify-between mt-4">
                       <div className="flex items-center gap-2">
                         <XCircle className="h-4 w-4 text-red-600" />
-                        <span className="text-sm font-medium">Email Incorrecto</span>
+                        <span className="text-sm font-medium">Email erróneo</span>
                       </div>
                       <span className="text-sm font-bold text-red-600">{metrics.campaigns.bounced}</span>
                     </div>
