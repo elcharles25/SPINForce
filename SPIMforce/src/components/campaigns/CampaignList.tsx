@@ -299,41 +299,64 @@ const handleDateChange = (emailNumber: number, newDate: string) => {
   recalculateDatesFrom(emailNumber, newDate);
 };
 
-const autoSendDailyEmails = async () => {
-  if (isSending) {
-    console.log('Ya hay un envío en curso, saltando...');
-    return;
-  }
+ const autoSendDailyEmails = async () => {
+    if (isSending) {
+      console.log('Ya hay un envío en curso, saltando...');
+      return;
+    }
 
-  try {
-    setIsSending(true);
-    console.log('Verificando emails para enviar...');
-    const today = new Date();
-    // Usar formato local YYYY-MM-DD
-    const localDate = today.toLocaleDateString('en-CA'); // 'en-CA' da formato YYYY-MM-DD
+    try {
+      setIsSending(true);
+      console.log('Verificando emails para enviar...');
+      const today = new Date();
+      const localDate = today.toLocaleDateString('en-CA');
 
-    for (const campaign of campaigns) {
-      if (!campaign.start_campaign) continue;
+      for (const campaign of campaigns) {
+        if (!campaign.start_campaign) continue;
 
-      for (let i = 1; i <= 5; i++) {
-        const dateField = `email_${i}_date` as keyof Campaign;
-        const emailDate = campaign[dateField];
-        const emailDateOnly = emailDate ? String(emailDate).split('T')[0] : null;
+        for (let i = 1; i <= 5; i++) {
+          const dateField = `email_${i}_date` as keyof Campaign;
+          const emailDate = campaign[dateField];
+          const emailDateOnly = emailDate ? String(emailDate).split('T')[0] : null;
 
-        if (emailDateOnly && emailDateOnly <= localDate && campaign.emails_sent < i) {
-          console.log(`Auto-enviando email ${i} para campaña ${campaign.id}`);
-          console.log(`Emails enviados antes: ${campaign.emails_sent}`);
-          await sendEmail(campaign, i);
-          break; // Solo enviar un email por campaña
+          if (emailDateOnly && emailDateOnly <= localDate && campaign.emails_sent < i) {
+            console.log(`Auto-enviando email ${i} para campaña ${campaign.id}`);
+            console.log(`Fecha original: ${emailDateOnly}, Fecha actual: ${localDate}`);
+            console.log(`Emails enviados antes: ${campaign.emails_sent}`);
+            
+            await sendEmail(campaign, i);
+            
+            if (emailDateOnly < localDate) {
+              console.log(`Email ${i} estaba atrasado, actualizando fechas...`);
+              
+              const updatedDates: any = {};
+              updatedDates[`email_${i}_date`] = localDate;
+              
+              const baseDate = new Date(localDate);
+              baseDate.setHours(0, 0, 0, 0);
+              
+              for (let j = i + 1; j <= 5; j++) {
+                baseDate.setDate(baseDate.getDate() + 3);
+                const year = baseDate.getFullYear();
+                const month = String(baseDate.getMonth() + 1).padStart(2, '0');
+                const day = String(baseDate.getDate()).padStart(2, '0');
+                updatedDates[`email_${j}_date`] = `${year}-${month}-${day}`;
+              }
+              
+              console.log('Fechas actualizadas:', updatedDates);
+              await db.updateCampaign(campaign.id, updatedDates);
+            }
+            
+            break;
+          }
         }
       }
+    } catch (e) {
+      console.log('Auto send completed with error:', e);
+    } finally {
+      setIsSending(false);
     }
-  } catch (e) {
-    console.log('Auto send completed with error:', e);
-  } finally {
-    setIsSending(false);
-  }
-};
+  };
 
 const checkAllReplies = async () => {
   setCheckingReplies(true);
