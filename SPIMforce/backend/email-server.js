@@ -2468,6 +2468,35 @@ app.get('/api/inbox/cache-info', async (req, res) => {
   }
 });
 
+// 🔍 DEBUG ENDPOINT - Diagnosticar problema de caché
+app.get('/api/inbox/debug-cache', async (req, res) => {
+  const cacheDir = path.join(__dirname, 'temp', 'inbox_cache');
+  
+  const info = {
+    __dirname,
+    cacheDir,
+    dirExists: fsSync.existsSync(cacheDir),
+    files: []
+  };
+  
+  try {
+    await fs.mkdir(cacheDir, { recursive: true });
+    if (fsSync.existsSync(cacheDir)) {
+      info.files = fsSync.readdirSync(cacheDir);
+    }
+    
+    // Test de escritura
+    const testFile = path.join(cacheDir, 'test.txt');
+    fsSync.writeFileSync(testFile, 'test');
+    info.canWrite = true;
+    fsSync.unlinkSync(testFile);
+  } catch (e) {
+    info.canWrite = false;
+    info.error = e.message;
+  }
+  
+  res.json(info);
+});
 
 
 

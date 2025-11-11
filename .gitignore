@@ -6,8 +6,6 @@
 spimforce/node_modules/
 spimforce-installer/node_modules/
 
-# Archivo temporales del inbox
-spimforce-installer/backend/temp/
 
 # Variables de entorno (contiene API keys privadas)
 spimforce/.env
@@ -41,8 +39,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Archivos temporales del backend
-spimforce/backend/temp/*.json
-spimforce/backend/temp/inbox_cache/*.json
+spimforce/backend/temp/*
+spimforce/backend/temp/inbox_cache/*
 !spimforce/backend/temp/.gitkeep
 !spimforce/backend/temp/inbox_cache/.gitkeep
 
