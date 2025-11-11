@@ -15,6 +15,9 @@ spimforce-installer/.env
 spimforce/runtime/
 !spimforce/runtime/.gitkeep
 
+# Archivos para generar columnas en BBDD
+spimforce/*.py
+
 # Archivos de bloqueo de dependencias (opcional según preferencia)
 # Descomenta si quieres que cada uno instale sus propias versiones
 spimforce/package-lock.json

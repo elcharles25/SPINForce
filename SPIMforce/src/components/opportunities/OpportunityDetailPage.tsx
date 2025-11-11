@@ -53,6 +53,15 @@ interface Opportunity {
   offer_presented: boolean;
   created_at: string;
   updated_at: string;
+  qualification_initiatives?: Array<{
+    title: string;
+    challenge: string;
+    gartner_value: string;
+    cost: string;
+    date: string;
+    detail_description: string;
+    owner: string;
+  }>;
   contact: {
     first_name: string;
     last_name: string;
@@ -438,13 +447,17 @@ ${notesContent}`;
 
       if (oppData && oppData.contact_id) {
         const fullContact = await db.getContact(oppData.contact_id);
-        // Reemplazar el contacto anidado con el contacto completo
         oppData.contact = fullContact;
       }
 
       setOpportunity(oppData);
       setMeetings(meetingsData);
       setContacts(contactsData);
+      
+      if (oppData?.qualification_initiatives) {
+        setQualificationInitiatives(oppData.qualification_initiatives);
+        setLastQualificationUpdate(oppData.updated_at);
+      }
     } catch (error) {
       console.error('Error cargando datos:', error);
     } finally {
@@ -466,14 +479,11 @@ ${notesContent}`;
     try {
       console.log('📊 Iniciando análisis de cualificación...');
 
-      // Generar archivo de notas usando la misma función que ContactDetailPage
       const notesContent = generateNotesFile(meetings);
       console.log(`📄 Archivo generado: ${notesContent.length} caracteres, ${meetings.length} interacciones`);
 
-      // Enviar a Gemini usando la misma función que ContactDetailPage
       const result = await analyzeWithGemini(notesContent, PROMPT_CUALIFICACION);
 
-      // Parsear JSON de la respuesta
       const jsonMatch = result.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('No se pudo extraer JSON de la respuesta');
@@ -484,6 +494,19 @@ ${notesContent}`;
 
       setQualificationInitiatives(extractedInitiatives);
       setLastQualificationUpdate(new Date().toISOString());
+
+      try {
+        await db.updateOpportunity(id!, {
+          contact_id: opportunity!.contact_id,
+          status: opportunity!.status,
+          proposed_solution: opportunity!.proposed_solution,
+          offer_presented: opportunity!.offer_presented,
+          qualification_initiatives: extractedInitiatives
+        });
+        console.log('💾 Iniciativas guardadas en base de datos');
+      } catch (dbError) {
+        console.error('Error guardando en BD:', dbError);
+      }
 
       toast({
         title: 'Análisis completado',
@@ -534,11 +557,9 @@ ${notesContent}`;
 
       const basePrompt = `En base a la información del fichero adjunto, que son emails y notas de reuniones de un comercial de la empresa Gartner con un cliente/prospect, ${customPrompt}`;
 
-      // Generar archivo de notas usando la misma función que ContactDetailPage
       const notesContent = generateNotesFile(meetings);
       console.log(`📄 Archivo generado: ${notesContent.length} caracteres, ${meetings.length} interacciones`);
 
-      // Enviar a Gemini usando la misma función que ContactDetailPage
       const result = await analyzeWithGemini(notesContent, basePrompt);
       setGeminiResult(result);
       setGeminiDialog(true);
@@ -779,7 +800,6 @@ ${notesContent}`;
         Volver a Oportunidades
       </Button>
 
-      {/* HEADER CON TIER */}
       <div className="flex justify-between items-start mb-1">
         <div className="flex items-center gap-10">
           <h1 className="text-3xl font-bold text-slate-800">
@@ -809,10 +829,8 @@ ${notesContent}`;
         {opportunity.contact.title} - {opportunity.contact.organization}
       </p>
 
-      {/* SECCIÓN SUPERIOR - SIMILAR A CONTACTDETAILPAGE */}
       <div className="grid grid-cols-12 gap-6 mb-6">
 
-        {/* INFORMACIÓN DE CONTACTO - 4 columnas */}
         <Card className="border-gray-200 shadow-sm rounded-2xl col-span-4">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold text-slate-800">Información de Contacto</CardTitle>
@@ -894,7 +912,6 @@ ${notesContent}`;
           </CardContent>
         </Card>
 
-        {/* NOTAS DEL CLIENTE - 5 columnas */}
         <Card className="col-span-5 bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200 shadow-sm rounded-2xl">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -948,7 +965,6 @@ ${notesContent}`;
                         };
                         await db.updateContact(opportunity.contact_id, updatedContact);
 
-                        // Actualizar el estado local
                         setOpportunity({
                           ...opportunity,
                           contact: {
@@ -1002,7 +1018,6 @@ ${notesContent}`;
           </CardContent>
         </Card>
 
-        {/* INFORMACIÓN DE OPORTUNIDAD - 3 columnas */}
         <Card className="col-span-3 border-gray-200 shadow-sm rounded-2xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold text-slate-800">Información de Oportunidad</CardTitle>
@@ -1024,7 +1039,6 @@ ${notesContent}`;
               <span className="font-medium">Interacciones:</span> {meetings.length}
             </div>
 
-            {/* Solución Propuesta integrada */}
             {opportunity.proposed_solution && (
               <div className="pt-3 mt-3 border-t border-gray-200">
                 <p className="font-semibold text-slate-700 mb-2">Solución Propuesta:</p>
@@ -1037,7 +1051,6 @@ ${notesContent}`;
         </Card>
       </div>
 
-      {/* ANÁLISIS CON IA */}
       <Card className="mb-6 bg-gradient-to-br from-indigo-50/20 to-indigo-100/50 border-indigo-200 shadow-sm rounded-2xl">
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-800">
@@ -1047,7 +1060,6 @@ ${notesContent}`;
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
-            {/* Columna izquierda - Botones de análisis */}
             <div className="flex flex-col h-full gap-3">
               <h3 className="text-base font-semibold text-slate-700 mb-3">Prompts para AE</h3>
 
@@ -1072,7 +1084,6 @@ ${notesContent}`;
               )}
             </div>
 
-            {/* Columna derecha - Iniciativas de cualificación */}
             <div className="border-l border-indigo-200 pl-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-700">
@@ -1160,7 +1171,6 @@ ${notesContent}`;
         </CardContent>
       </Card>
 
-      {/* INTERACCIONES */}
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -1229,7 +1239,6 @@ ${notesContent}`;
         </CardContent>
       </Card>
 
-      {/* Dialog de edición de oportunidad */}
       <Dialog open={opportunityDialog} onOpenChange={setOpportunityDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1384,7 +1393,6 @@ ${notesContent}`;
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de confirmación de eliminación de oportunidad */}
       <AlertDialog
         open={deleteOpportunityDialog}
         onOpenChange={setDeleteOpportunityDialog}
@@ -1405,7 +1413,6 @@ ${notesContent}`;
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog de reuniones */}
       <Dialog open={meetingDialog} onOpenChange={setMeetingDialog}>
         <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1512,7 +1519,6 @@ ${notesContent}`;
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog de análisis Gemini */}
       <Dialog open={geminiDialog} onOpenChange={setGeminiDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
@@ -1540,7 +1546,6 @@ ${notesContent}`;
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de prompt personalizado */}
       <Dialog open={customPromptDialog} onOpenChange={setCustomPromptDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1570,7 +1575,7 @@ ${notesContent}`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Dialog de detalle de iniciativa de cualificación */}
+
       <Dialog open={qualificationDetailDialog} onOpenChange={setQualificationDetailDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1581,9 +1586,6 @@ ${notesContent}`;
 
           {selectedQualificationInitiative && (
             <div className="space-y-4">
-              {/* Información general */}
-
-              {/* Descripción detallada */}
               {selectedQualificationInitiative.detail_description && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
@@ -1627,9 +1629,6 @@ ${notesContent}`;
                 </div>
               </div>
 
-
-
-              {/* Valor que Gartner puede aportar */}
               {selectedQualificationInitiative.gartner_value && (
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                   <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
