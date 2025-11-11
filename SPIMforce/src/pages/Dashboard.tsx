@@ -303,7 +303,7 @@ const Dashboard = () => {
         .forEach((c: any) => {
           recentActivity.push({
             type: 'reply',
-            description: `${c.contacts.first_name} ${c.contacts.last_name} respondió a campaña`,
+            description: `Campaña respondida: ${c.contacts.organization} - ${c.contacts.first_name} ${c.contacts.last_name}`,
             date: c.last_reply_date,
             icon: 'target'
           });
@@ -358,7 +358,7 @@ const Dashboard = () => {
         .forEach((c: any) => {
           recentActivity.push({
             type: 'contact_new',
-            description: `Nuevo contacto: ${c.first_name} ${c.last_name} (${c.organization})`,
+            description: `Nuevo contacto: ${c.organization} - ${c.first_name} ${c.last_name}`,
             date: c.created_at || new Date().toISOString(),
             icon: 'user'
           });
@@ -371,7 +371,7 @@ const Dashboard = () => {
         .forEach((c: any) => {
           recentActivity.push({
             type: 'campaign_started',
-            description: `Campaña iniciada: ${c.contacts.organization}`,
+            description: `Campaña iniciada: ${c.contacts.organization} - ${c.contacts.first_name}`,
             date: c.email_1_date || new Date().toISOString(),
             icon: 'target'
           });
