@@ -156,6 +156,23 @@ export const CampaignList = () => {
 }, [campaigns.length, loading]);
 
 useEffect(() => {
+  if (campaigns.length > 0 && !loading) {
+    const lastFollowUpCheck = localStorage.getItem('last_followup_check');
+    const now = new Date().getTime();
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    if (!lastFollowUpCheck || (now - parseInt(lastFollowUpCheck)) > oneDay) {
+      console.log('🔄 VERIFICANDO CAMPAÑAS PARA FOLLOW-UP (60 días)');
+      createFollowUpCampaigns();
+      localStorage.setItem('last_followup_check', now.toString());
+    } else {
+      const hoursLeft = Math.ceil((oneDay - (now - parseInt(lastFollowUpCheck))) / (1000 * 60 * 60));
+      console.log(`⏰ Próxima verificación de follow-up en ${hoursLeft} horas`);
+    }
+  }
+}, [campaigns.length, loading]);
+
+useEffect(() => {
   const handleCampaignsUpdated = () => {
     console.log('📢 Evento campaignsUpdated recibido, recargando campañas...');
     fetchCampaigns();
@@ -167,6 +184,87 @@ useEffect(() => {
     window.removeEventListener('campaignsUpdated', handleCampaignsUpdated);
   };
 }, []);
+
+const createFollowUpCampaigns = async () => {
+  try {
+    console.log('🔍 Buscando campañas completadas sin respuesta hace más de 60 días...');
+    
+    const completedCampaigns = campaigns.filter(campaign => {
+      if (campaign.has_replied || campaign.email_incorrect || campaign.emails_sent < 5) {
+        return false;
+      }
+
+      if (!campaign.email_5_date) {
+        return false;
+      }
+
+      const email5Date = new Date(campaign.email_5_date);
+      const today = new Date();
+      const daysDifference = Math.floor((today.getTime() - email5Date.getTime()) / (1000 * 60 * 60 * 24));
+
+      return daysDifference >= 60;
+    });
+
+    console.log(`📊 Encontradas ${completedCampaigns.length} campañas que cumplen los criterios`);
+
+    if (completedCampaigns.length === 0) {
+      return;
+    }
+
+    const allCampaignsData = await db.getCampaigns();
+    let createdCount = 0;
+
+    for (const campaign of completedCampaigns) {
+      const existingFollowUp = allCampaignsData.find(c => 
+        c.contact_id === campaign.contact_id &&
+        c.template_id === null &&
+        !c.start_campaign &&
+        c.id !== campaign.id
+      );
+
+      if (existingFollowUp) {
+        console.log(`⏭️ Ya existe campaña follow-up para ${campaign.contacts.first_name} ${campaign.contacts.last_name}`);
+        continue;
+      }
+
+      const todayDate = new Date().toISOString().split('T')[0];
+      
+      const newCampaignData = {
+        contact_id: campaign.contact_id,
+        template_id: null,
+        start_campaign: false,
+        email_1_date: todayDate,
+        email_2_date: null,
+        email_3_date: null,
+        email_4_date: null,
+        email_5_date: null,
+        status: "pending",
+      };
+
+      await db.createCampaign(newCampaignData);
+      createdCount++;
+      
+      console.log(`✅ Campaña follow-up creada para ${campaign.contacts.first_name} ${campaign.contacts.last_name}`);
+    }
+
+    if (createdCount > 0) {
+      toast({
+        title: "Campañas de seguimiento creadas",
+        description: `Se crearon ${createdCount} campaña${createdCount > 1 ? 's' : ''} de seguimiento automática${createdCount > 1 ? 's' : ''} (60 días)`,
+      });
+      
+      await fetchCampaigns();
+    }
+
+  } catch (error) {
+    console.error('❌ Error creando campañas de follow-up:', error);
+    toast({
+      title: "Error",
+      description: "No se pudieron crear las campañas de seguimiento",
+      variant: "destructive"
+    });
+  }
+};
 
 /**
  * Calcula el estado de una campaña

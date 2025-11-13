@@ -4,7 +4,7 @@ import { db } from "@/lib/db-adapter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Target, TrendingUp, Mail, Calendar, CheckCircle2, XCircle, Clock, Building2, Zap, Award, Activity, Briefcase, CalendarCheck, CircleCheckBig, CircleOff, AlertCircle } from "lucide-react";
+import { Users, Target, TrendingUp, Mail, CircleArrowRight, XCircle, Clock, Building2, Zap, Award, Activity, Briefcase, CalendarCheck, CircleCheckBig, CircleOff } from "lucide-react";
 import { Bar } from "react-chartjs-2";
 import { formatDateTime } from "@/utils/dateFormatter";
 
@@ -40,6 +40,7 @@ interface DashboardMetrics {
     campaignsInactive: number;
     bounced: number;
     pending: number;
+    waiting: number;
     totalEmailsSent: number;
     averageEmailsPerCampaign: number;
   };
@@ -129,6 +130,47 @@ const Dashboard = () => {
     }
   };
 
+  // Utilidad: parsea fechas en varios formatos comunes y devuelve un Date o null
+  function parseDateSafe(str) {
+    if (typeof str !== "string") return null;
+    const s = str.trim();
+
+    // ISO completo o parcial: YYYY-MM-DD o YYYY-MM-DDTHH:mm[:ss][Z]
+    // Esto es seguro con new Date en la mayoría de entornos
+    const isoLike = /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+\-]\d{2}:\d{2})?)?$/;
+    if (isoLike.test(s)) {
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    // DD/MM/YYYY
+    let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) {
+      const [_, dd, mm, yyyy] = m.map(Number);
+      // Mes en JS: 0-11
+      const d = new Date(yyyy, mm - 1, dd);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    // DD-MM-YYYY
+    m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (m) {
+      const [_, dd, mm, yyyy] = m.map(Number);
+      const d = new Date(yyyy, mm - 1, dd);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    // Si llega en otro formato, puedes extender aquí con más casos.
+    return null;
+  }
+
+  // Normaliza una fecha al inicio del día local
+  function normalizeToStartOfDay(d) {
+    const n = new Date(d);
+    n.setHours(0, 0, 0, 0);
+    return n;
+  }
+
   const formatDate = (dateString: string) => {
     const date = parseFlexibleDate(dateString);
     const now = new Date();
@@ -181,8 +223,11 @@ const Dashboard = () => {
       let repliedCount = 0;
       let bouncedCount = 0;
       let pendingCount = 0;
+      let waitingCount = 0;
       let totalEmailsSent = 0;
       let wonOpportunitiesCount = 0;
+
+      const hoy = normalizeToStartOfDay(new Date());
 
       campaigns.forEach((campaign: any) => {
         totalEmailsSent += campaign.emails_sent || 0;
@@ -193,15 +238,26 @@ const Dashboard = () => {
           repliedCount++;
         } else if (campaign.emails_sent >= 5) {
           completedCount++;
-        } else if (campaign.start_campaign) {
-          activeCount++;
+        } else if (campaign.start_campaign && campaign.email_1_date) {
+          const email1Date = parseDateSafe(campaign.email_1_date);
+          if (email1Date) {
+            const fechaEmail1 = normalizeToStartOfDay(email1Date);
+            if (fechaEmail1 > hoy) {
+              waitingCount++;
+            } else {
+              activeCount++;
+            }
+          } else {
+            activeCount++;
+          }
         } else {
           pendingCount++;
         }
       });
 
       const campaignsInactive = (repliedCount + completedCount);
-      const replyRate = campaigns.length > 0 ? (repliedCount / campaigns.length) * 100 : 0;
+      const campaignsInactActive = (campaignsInactive + activeCount);
+      const replyRate = campaigns.length > 0 ? (repliedCount / campaignsInactActive) * 100 : 0;
       const averageEmailsPerCampaign = campaigns.length > 0 ? totalEmailsSent / campaigns.length : 0;
 
       const templateMap: Record<string, { total: number; replied: number; name: string }> = {};
@@ -418,6 +474,7 @@ const Dashboard = () => {
           replyRate,
           bounced: bouncedCount,
           pending: pendingCount,
+          waiting: waitingCount,
           totalEmailsSent,
           averageEmailsPerCampaign,
           campaignsInactive,
@@ -675,7 +732,7 @@ const Dashboard = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-indigo-600" />
+                        <CircleArrowRight className="h-4 w-4 text-indigo-600" />
                         <span className="text-sm font-medium">En Curso</span>
                       </div>
                       <span className="text-sm font-bold text-indigo-600">{metrics.campaigns.active}</span>
@@ -698,6 +755,20 @@ const Dashboard = () => {
                       <div 
                         className="bg-mediumseagreen h-2 rounded-full transition-all"
                         style={{ width: `${(metrics.campaigns.replied / metrics.campaigns.total) * 100}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-slate-600" />
+                        <span className="text-sm font-medium">Pendientes</span>
+                      </div>
+                      <span className="text-sm font-bold text-slate-600">{metrics.campaigns.waiting}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-slate-400 h-2 rounded-full transition-all"
+                        style={{ width: `${(metrics.campaigns.waiting / metrics.campaigns.total) * 100}%` }}
                       />
                     </div>
 
