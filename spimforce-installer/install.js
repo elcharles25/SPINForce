@@ -188,6 +188,7 @@ function createDatabase() {
           ep_email TEXT, 
           last_email_check TEXT,
           ai_initiatives TEXT,
+          photo_url TEXT,
           created_at TEXT DEFAULT (datetime('now')),
           updated_at TEXT DEFAULT (datetime('now'))
         )`
@@ -252,6 +253,8 @@ function createDatabase() {
           status TEXT DEFAULT 'open',
           proposed_solution TEXT,
           offer_presented INTEGER DEFAULT 0,
+          qualification_initiatives TEXT,
+          last_qualification_update TEXT,
           created_at TEXT DEFAULT (datetime('now')),
           updated_at TEXT DEFAULT (datetime('now')),
           FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
