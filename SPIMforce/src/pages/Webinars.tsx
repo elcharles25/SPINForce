@@ -7,11 +7,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Send, Trash2, FileText, X, Loader2, Sparkles, Calendar, Clock, User } from "lucide-react";
+import { Settings, Send, Trash2, FileText, X, Loader2, Sparkles, Calendar, Clock, User, Mail, CheckSquare, Square, Paperclip } from "lucide-react";
 import { WebinarEmailEditor } from "@/components/webinars/WebinarEmailEditor";
 import { useOutlookDraftBatch } from "@/hooks/useOutlookDraft";
 import { formatDateES } from "@/utils/dateFormatter";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface WebinarDistribution {
   id: string;
@@ -40,6 +50,34 @@ interface UploadedPdf {
   size: number;
 }
 
+interface Contact {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  organization: string;
+  gartner_role: string;
+  title: string;
+}
+
+interface AttachedFile {
+  name: string;
+  url: string;
+  size: number;
+}
+
+const GARTNER_ROLES = [
+  'CIO',
+  'CISO',
+  'CDAO',
+  'Talent',
+  'Workplace',
+  'Procurement',
+  'Enterprise Architect',
+  'CAIO',
+  'Infrastructure & Operations'
+];
+
 const Webinars = () => {
   const [distributions, setDistributions] = useState<WebinarDistribution[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -56,9 +94,46 @@ const Webinars = () => {
   const [currentDistributionId, setCurrentDistributionId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Estados para emails masivos
+  const [selectedRole, setSelectedRole] = useState<string>('');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [sendingEmails, setSendingEmails] = useState(false);
+
   useEffect(() => {
     fetchDistributions();
+    fetchContacts();
   }, []);
+
+  useEffect(() => {
+    if (selectedRole) {
+      const filtered = contacts.filter(c => c.gartner_role === selectedRole);
+      setFilteredContacts(filtered);
+      setSelectedContactIds(new Set());
+    } else {
+      setFilteredContacts([]);
+      setSelectedContactIds(new Set());
+    }
+  }, [selectedRole, contacts]);
+
+  const fetchContacts = async () => {
+    try {
+      const data = await db.getContacts();
+      setContacts(data || []);
+    } catch (error) {
+      console.error("Error cargando contactos:", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los contactos",
+        variant: "destructive"
+      });
+    }
+  };
 
   const fetchDistributions = async () => {
     try {
@@ -135,12 +210,90 @@ const Webinars = () => {
     }
   };
 
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+
+    try {
+      console.log(`📎 Subiendo adjunto ${file.name}...`);
+      
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('http://localhost:3001/api/upload-webinar', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Error subiendo archivo');
+      }
+
+      const result = await response.json();
+      
+      const newFile: AttachedFile = {
+        name: result.name,
+        url: result.url,
+        size: result.size
+      };
+
+      setAttachedFiles(prev => [...prev, newFile]);
+      
+      toast({ 
+        title: "Éxito", 
+        description: `Archivo "${result.name}" adjuntado correctamente` 
+      });
+
+      e.target.value = '';
+      
+    } catch (error) {
+      console.error(`❌ Error subiendo adjunto:`, error);
+      toast({ 
+        title: "Error", 
+        description: `No se pudo subir el archivo`, 
+        variant: "destructive" 
+      });
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+    toast({
+      title: "Archivo eliminado",
+      description: "El adjunto ha sido eliminado"
+    });
+  };
+
   const handleRemovePdf = () => {
     setUploadedPdf(null);
     toast({
       title: "PDF eliminado",
       description: "Puedes subir otro archivo"
     });
+  };
+
+  const toggleContactSelection = (contactId: string) => {
+    setSelectedContactIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(contactId)) {
+        newSet.delete(contactId);
+      } else {
+        newSet.add(contactId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedContactIds.size === filteredContacts.length) {
+      setSelectedContactIds(new Set());
+    } else {
+      setSelectedContactIds(new Set(filteredContacts.map(c => c.id)));
+    }
   };
 
   const extractTextFromPdf = async (pdfUrl: string): Promise<string> => {
@@ -470,6 +623,94 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
     }
   };
 
+  const handleSendMassEmails = async () => {
+    if (selectedContactIds.size === 0) {
+      toast({
+        title: "Error",
+        description: "Debes seleccionar al menos un contacto",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      toast({
+        title: "Error",
+        description: "El asunto y el cuerpo del email son obligatorios",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSendingEmails(true);
+
+    try {
+      const emailSignatureSetting = await db.getSetting('email_signature');
+      const signature = emailSignatureSetting?.value?.signature || '';
+
+      const selectedContacts = filteredContacts.filter(c => selectedContactIds.has(c.id));
+
+      const draftsToCreate = selectedContacts.map((contact) => {
+        let personalizedBody = emailBody
+          .replace(/{{Nombre}}/g, contact.first_name || '')
+          .replace(/{{Apellido}}/g, contact.last_name || '')
+          .replace(/{{Organization}}/g, contact.organization || '')
+          .replace(/{{Organización}}/g, contact.organization || '')
+          .replace(/{{Titulo}}/g, contact.title || '')
+          .replace(/{{Título}}/g, contact.title || '');
+
+        personalizedBody += signature;
+
+        const draft: any = {
+          to: contact.email,
+          subject: emailSubject,
+          body: personalizedBody,
+        };
+
+        if (attachedFiles.length > 0) {
+          draft.attachments = attachedFiles.map(file => ({
+            name: file.name,
+            url: `http://localhost:3001${file.url}`
+          }));
+        }
+
+        return draft;
+      });
+
+      createDraftsBatch({ emails: draftsToCreate }, {
+        onSuccess: () => {
+          toast({
+            title: "Éxito",
+            description: `${draftsToCreate.length} borradores creados en Outlook`
+          });
+
+          setSelectedRole('');
+          setSelectedContactIds(new Set());
+          setEmailSubject('');
+          setEmailBody('');
+          setAttachedFiles([]);
+        },
+        onError: (error) => {
+          toast({
+            title: "Error",
+            description: "No se pudieron crear los borradores",
+            variant: "destructive"
+          });
+        }
+      });
+
+    } catch (error) {
+      console.error("Error enviando emails masivos:", error);
+      toast({
+        title: "Error",
+        description: "Error al preparar los emails",
+        variant: "destructive"
+      });
+    } finally {
+      setSendingEmails(false);
+    }
+  };
+
   const handleDelete = async (id: string, fileUrl: string) => {
     if (!confirm("¿Eliminar esta distribución?")) return;
 
@@ -497,150 +738,344 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">Gestión de Webinars</h1>
-          <Button 
-            variant="outline" 
-            className="rounded-full shadow-sm hover:shadow-md transition-shadow hover:bg-indigo-100"
-            onClick={() => setShowEmailEditor(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Configurar Email
-          </Button>
+          <h1 className="text-3xl font-bold text-foreground">Webinars e Emails masivos</h1>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Enviar nueva distribucuión</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="month">Mes</Label>
-                <Input 
-                  id="month" 
-                  type="month" 
-                  value={month} 
-                  onChange={(e) => setMonth(e.target.value)} 
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="pdf-upload">Calendario PDF</Label>
-                <Input
-                  id="pdf-upload"
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleFileUpload}
-                  disabled={uploading || !!uploadedPdf}
-                  className="cursor-pointer"
-                />
-              </div>
-            </div>
+        <Tabs defaultValue="distributions" className="w-full">
+          <TabsList className="inline-flex gap-2">
+            <TabsTrigger value="distributions">Distribuciones de Webinars</TabsTrigger>
+            <TabsTrigger value="mass-email">Emails Masivos</TabsTrigger>
+          </TabsList>
 
-            {uploadedPdf && (
-              <div className="mt-2">
-                <div className="flex items-center justify-between p-2 bg-muted rounded">
-                  <span className="flex items-center text-sm">
-                    <FileText className="h-4 w-4 mr-2" />
-                    {uploadedPdf.name}
-                    <span className="text-xs text-muted-foreground ml-2">
-                      ({(uploadedPdf.size / 1024 / 1024).toFixed(2)} MB)
-                    </span>
-                  </span>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={handleRemovePdf}
-                    disabled={uploading}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div className="flex justify-end">
+          <TabsContent value="distributions" className="space-y-6">
+            <div className="flex items-center justify-end mb-4">
               <Button 
-                onClick={handleSaveDistribution} 
-                disabled={uploading || !uploadedPdf || !month || isAnalyzing} 
-                className="rounded-full shadow-sm hover:shadow-md transition-shadow bg-indigo-500 hover:bg-indigo-600"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analizando...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Analizar y enviar webinars
-                  </>
-                )}
+                variant="outline" 
+                className="rounded-full shadow-sm hover:shadow-md transition-shadow hover:bg-indigo-100"
+                onClick={() => setShowEmailEditor(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Configurar email de Webinars
               </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Webinars enviados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {distributions.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                No hay distribuciones creadas. Carga un PDF y guarda una distribución.
-              </p>
-            ) : (
-              <div className="bg-card rounded-lg shadow overflow-hidden overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted hover:bg-muted/50">
-                      <TableHead className="text-center">Mes</TableHead>
-                      <TableHead className="text-center">Archivo</TableHead>
-                      <TableHead className="text-center">Estado</TableHead>
-                      <TableHead className="text-center">Fecha Envío</TableHead>
-                      <TableHead className="text-center">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {distributions.map((dist) => (
-                      <TableRow key={dist.id} className="text-sm leading-tight text-center align-middle">
-                        <TableCell className="p-4">{dist.month}</TableCell>
-                        <TableCell className="p-4">
-                          <a href={dist.file_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                            {dist.file_name}
-                          </a>
-                        </TableCell>
-                        <TableCell className="p-4">
-                          <span className={`leading-tight rounded text-xs ${dist.sent ? "px-10 py-2.5 bg-green-500/20" : "px-9 py-2.5 bg-yellow-500/20"}`}>
-                            {dist.sent ? "Enviado" : "Pendiente"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="p-4">{formatDateES(dist.sent_at)}</TableCell>
-                        <TableCell className="p-4">
-                          <div className="flex justify-center gap-3">
-                            <Button 
-                              size="sm" 
-                              variant="destructive" 
-                              className="h-8 px-2 py-0" 
-                              onClick={() => handleDelete(dist.id, dist.file_url)}
-                              disabled={dist.sent}
-                              title={
-                                dist.sent
-                                  ? "No se puede eliminar - webinar enviado"
-                                  : "Eliminar distribución"
-                              }
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+            <Card>
+              <CardHeader>
+                <CardTitle>Enviar nuevo Webinar</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="month">Mes</Label>
+                    <Input 
+                      id="month" 
+                      type="month" 
+                      value={month} 
+                      onChange={(e) => setMonth(e.target.value)} 
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="pdf-upload">Calendario PDF</Label>
+                    <Input
+                      id="pdf-upload"
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleFileUpload}
+                      disabled={uploading || !!uploadedPdf}
+                      className="cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {uploadedPdf && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between p-2 bg-muted rounded">
+                      <span className="flex items-center text-sm">
+                        <FileText className="h-4 w-4 mr-2" />
+                        {uploadedPdf.name}
+                        <span className="text-xs text-muted-foreground ml-2">
+                          ({(uploadedPdf.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                      </span>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={handleRemovePdf}
+                        disabled={uploading}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <Button 
+                    onClick={handleSaveDistribution} 
+                    disabled={uploading || !uploadedPdf || !month || isAnalyzing} 
+                    className="rounded-full shadow-sm hover:shadow-md transition-shadow bg-indigo-500 hover:bg-indigo-600"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analizando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Analizar y enviar Webinars
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Distribuciones de Webinars</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {distributions.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    No hay distribuciones creadas. Carga un PDF y guarda una distribución.
+                  </p>
+                ) : (
+                  <div className="bg-card rounded-lg shadow overflow-hidden overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted hover:bg-muted/50">
+                          <TableHead className="text-center">Mes</TableHead>
+                          <TableHead className="text-center">Archivo</TableHead>
+                          <TableHead className="text-center">Estado</TableHead>
+                          <TableHead className="text-center">Fecha Envío</TableHead>
+                          <TableHead className="text-center">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {distributions.map((dist) => (
+                          <TableRow key={dist.id} className="text-sm leading-tight text-center align-middle">
+                            <TableCell className="p-4">{dist.month}</TableCell>
+                            <TableCell className="p-4">
+                              <a href={dist.file_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                {dist.file_name}
+                              </a>
+                            </TableCell>
+                            <TableCell className="p-4">
+                              <span className={`leading-tight rounded text-xs ${dist.sent ? "px-10 py-2.5 bg-green-500/20" : "px-9 py-2.5 bg-yellow-500/20"}`}>
+                                {dist.sent ? "Enviado" : "Pendiente"}
+                              </span>
+                            </TableCell>
+                            <TableCell className="p-4">{formatDateES(dist.sent_at)}</TableCell>
+                            <TableCell className="p-4">
+                              <div className="flex justify-center gap-3">
+                                <Button 
+                                  size="sm" 
+                                  variant="destructive" 
+                                  className="h-8 px-2 py-0" 
+                                  onClick={() => handleDelete(dist.id, dist.file_url)}
+                                  disabled={dist.sent}
+                                  title={
+                                    dist.sent
+                                      ? "No se puede eliminar - webinar enviado"
+                                      : "Eliminar distribución"
+                                  }
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="mass-email" className="space-y-6 py-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-indigo-500" />
+                  Envío Masivo de Emails
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <Label htmlFor="gartner-role">Seleccionar Rol de Gartner</Label>
+                  <Select value={selectedRole} onValueChange={setSelectedRole}>
+                    <SelectTrigger id="gartner-role">
+                      <SelectValue placeholder="Selecciona un rol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {GARTNER_ROLES.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedRole && (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <Label>Seleccionar Contactos ({selectedContactIds.size} de {filteredContacts.length})</Label>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={toggleSelectAll}
+                          disabled={filteredContacts.length === 0}
+                        >
+                          {selectedContactIds.size === filteredContacts.length ? (
+                            <>
+                              <Square className="h-4 w-4 mr-2" />
+                              Deseleccionar Todos
+                            </>
+                          ) : (
+                            <>
+                              <CheckSquare className="h-4 w-4 mr-2" />
+                              Seleccionar Todos
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
+                      {filteredContacts.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-4 text-sm">
+                          No hay contactos con el rol seleccionado
+                        </p>
+                      ) : (
+                        <div className="border rounded-lg max-h-64 overflow-y-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted">
+                                <TableHead className="w-12"></TableHead>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Organización</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {filteredContacts.map((contact) => (
+                                <TableRow key={contact.id}>
+                                  <TableCell className="text-center">
+                                    <Checkbox
+                                      checked={selectedContactIds.has(contact.id)}
+                                      onCheckedChange={() => toggleContactSelection(contact.id)}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    {contact.first_name} {contact.last_name}
+                                  </TableCell>
+                                  <TableCell>{contact.email}</TableCell>
+                                  <TableCell>{contact.organization}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="email-subject">Asunto del Email</Label>
+                      <Input
+                        id="email-subject"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        placeholder="Asunto del email..."
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Variables disponibles: {`{{Nombre}}, {{Apellido}}, {{Organización}}, {{Título}}`}
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="email-body">Cuerpo del Email (HTML)</Label>
+                      <Textarea
+                        id="email-body"
+                        value={emailBody}
+                        onChange={(e) => setEmailBody(e.target.value)}
+                        placeholder="Escribe el cuerpo del email en HTML..."
+                        rows={12}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Variables disponibles: {`{{Nombre}}, {{Apellido}}, {{Organización}}, {{Título}}`}
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="attachments">Archivos Adjuntos</Label>
+                      <div className="space-y-2">
+                        <Input
+                          id="attachments"
+                          type="file"
+                          onChange={handleAttachmentUpload}
+                          disabled={uploadingFile}
+                          className="cursor-pointer"
+                        />
+                        
+                        {attachedFiles.length > 0 && (
+                          <div className="space-y-2 mt-2">
+                            {attachedFiles.map((file, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
+                                <span className="flex items-center text-sm">
+                                  <Paperclip className="h-4 w-4 mr-2" />
+                                  {file.name}
+                                  <span className="text-xs text-muted-foreground ml-2">
+                                    ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                                  </span>
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleRemoveAttachment(index)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={handleSendMassEmails}
+                        disabled={
+                          selectedContactIds.size === 0 ||
+                          !emailSubject.trim() ||
+                          !emailBody.trim() ||
+                          sendingEmails ||
+                          isCreatingDrafts
+                        }
+                        className="rounded-full shadow-sm hover:shadow-md transition-shadow bg-indigo-500 hover:bg-indigo-600"
+                      >
+                        {sendingEmails || isCreatingDrafts ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Creando borradores...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4 mr-2" />
+                            Crear Borradores en Outlook ({selectedContactIds.size})
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
         <Dialog open={showEmailEditor} onOpenChange={setShowEmailEditor}>
           <DialogContent className="max-w-2xl">
