@@ -31,7 +31,7 @@ export default {
         roboto: ["Roboto", "sans-serif"],  // ✅ Fuente personalizada
       },
       colors: {
-        mediumseagreen: '#3CB371',
+        mediumseagreen: '#A7E399',
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -97,5 +97,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  
 } satisfies Config;

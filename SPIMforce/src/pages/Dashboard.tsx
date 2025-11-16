@@ -1120,7 +1120,7 @@ const Dashboard = () => {
                           </div>
                           <Badge
                             variant="outline"
-                            className={template.replyRate >= 20 ? "bg-green-50 border-green-400 text-gray-700 hover:bg-green-50" : ""}
+                            className={template.replyRate >= 20 ? "bg-green-50 border-mediumseagreen text-gray-700 hover:bg-green-50" : ""}
                           >
                             {formatPercentage(template.replyRate)}
                           </Badge>
@@ -1129,9 +1129,9 @@ const Dashboard = () => {
                           <div
                             className={`h-2 rounded-full transition-all ${
                               template.replyRate >= 30 ? 'bg-mediumseagreen' :
-                              template.replyRate >= 20 ? 'bg-green-400' :
-                              template.replyRate >= 10 ? 'bg-yellow-400' :
-                              'bg-red-400'
+                              template.replyRate >= 20 ? 'mediumseagreen' :
+                              template.replyRate >= 10 ? 'bg-yellow-300' :
+                              'bg-red-300'
                             }`}
                             style={{ width: `${Math.min(template.replyRate, 100)}%` }}
                           />
@@ -1164,7 +1164,7 @@ const Dashboard = () => {
                           </div>
                           <Badge
                             variant="outline"
-                            className={role.replyRate >= 20 ? "bg-green-50 border-green-400 text-gray-700 hover:bg-green-50" : ""}
+                            className={role.replyRate >= 20 ? "bg-green-50 border-mediumseagreen text-gray-700 hover:bg-green-50" : ""}
                           >
                             {formatPercentage(role.replyRate)}
                           </Badge>
@@ -1172,10 +1172,10 @@ const Dashboard = () => {
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
                             className={`h-2 rounded-full transition-all ${
-                              role.replyRate >= 30 ? 'bg-green-600' :
-                              role.replyRate >= 20 ? 'bg-green-400' :
-                              role.replyRate >= 10 ? 'bg-yellow-400' :
-                              'bg-red-400'
+                              role.replyRate >= 30 ? 'bg-mediumseagreen' :
+                              role.replyRate >= 20 ? 'mediumseagreen' :
+                              role.replyRate >= 10 ? 'bg-yellow-300' :
+                              'bg-red-300'
                             }`}
                             style={{ width: `${Math.min(role.replyRate, 100)}%` }}
                           />
