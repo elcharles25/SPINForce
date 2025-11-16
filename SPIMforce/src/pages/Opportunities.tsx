@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Plus, Trash2, Pencil, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { formatDateTime } from "@/utils/dateFormatter";
 
 interface Contact {
   id: string;
@@ -102,6 +103,7 @@ export default function OpportunitiesPage() {
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
   const [loading, setLoading] = useState(true);
   const [meetingCounts, setMeetingCounts] = useState<Record<string, number>>({});
+  const [lastMeetingDates, setLastMeetingDates] = useState<Record<string, string>>({});
   const [form, setForm] = useState<OpportunityForm>({
     organization: '',
     contact_id: '',
@@ -128,18 +130,40 @@ export default function OpportunitiesPage() {
       
       // Cargar reuniones para cada oportunidad
       const counts: Record<string, number> = {};
+      const lastDates: Record<string, string> = {};
+      
       await Promise.all(
         data.map(async (opp) => {
           try {
             const meetings = await db.getMeetingsByOpportunity(opp.id);
-            counts[opp.id] = meetings.length;
+            
+            // Filtrar reuniones que NO sean "Email" ni "Teléfono"
+            const filteredMeetings = meetings.filter(
+              (meeting: Meeting) => 
+                meeting.meeting_type !== 'Email' && 
+                meeting.meeting_type !== 'Teléfono'
+            );
+            
+            counts[opp.id] = filteredMeetings.length;
+            
+            // Obtener la fecha de la última reunión filtrada
+            if (filteredMeetings.length > 0) {
+              const sortedMeetings = [...filteredMeetings].sort((a, b) => {
+                const dateA = new Date(a.meeting_date).getTime();
+                const dateB = new Date(b.meeting_date).getTime();
+                return dateB - dateA;
+              });
+              lastDates[opp.id] = sortedMeetings[0].meeting_date;
+            }
           } catch (error) {
             console.error(`Error cargando reuniones para oportunidad ${opp.id}:`, error);
             counts[opp.id] = 0;
           }
         })
       );
+      
       setMeetingCounts(counts);
+      setLastMeetingDates(lastDates);
     } catch (error) {
       console.error('Error cargando oportunidades:', error);
       toast({
@@ -554,7 +578,7 @@ export default function OpportunitiesPage() {
               <col className="w-[200px]" />
               <col className="w-[120px]" />
               <col className="w-[100px]" />
-              <col className="w-[100px]" />
+              <col className="w-[150px]" />
             </colgroup>
             <TableHeader>
               <TableRow className="bg-muted hover:bg-muted/50">
@@ -602,9 +626,16 @@ export default function OpportunitiesPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {meetingCounts[opportunity.id] || 0}
-                          </Badge>
+                          <div className="flex flex-col items-center gap-1">
+                            <Badge variant="secondary">
+                              {meetingCounts[opportunity.id] || 0}
+                            </Badge>
+                            {lastMeetingDates[opportunity.id] && (
+                              <span className="text-xs text-muted-foreground">
+                                Última reunión: {formatDateTime(lastMeetingDates[opportunity.id])}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -616,4 +647,4 @@ export default function OpportunitiesPage() {
       </div>
     </div>
   );
-};
+}
