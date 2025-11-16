@@ -43,7 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Plus, Pencil, Trash2, Mail, Phone, Linkedin, Sparkles, TrendingUp, ClipboardList, MessageSquare, Copy, Loader2, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Mail, Phone, Linkedin, Sparkles, TrendingUp, ClipboardList, MessageSquare, Copy, Loader2, ImageIcon, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Opportunity {
@@ -56,13 +56,21 @@ interface Opportunity {
   updated_at: string;
   last_qualification_update: string;
   qualification_initiatives?: Array<{
-    title: string;
-    challenge: string;
-    gartner_value: string;
-    cost: string;
-    date: string;
-    detail_description: string;
-    owner: string;
+    priority_title: string;
+    priority_challenge: string;
+    priority_gartner_value: string;
+    priority_cost: string;
+    priority_date: string;
+    priority_detail_description: string;
+    initiatives: Array<{
+      initiative_title: string;
+      initiative_challenge: string;
+      initiative_gartner_value: string;
+      initiative_cost: string;
+      initiative_date: string;
+      initiative_detail_description: string;
+      initiative_owner: string;
+    }>;
   }>;
   contact: {
     first_name: string;
@@ -173,92 +181,60 @@ const SOLUTION_TYPES = [
 
 const SOLUTION_MODES = ['Guided', 'Self-directed'];
 
-const generateNotesFile = (meetings: Meeting[], opportunity: Opportunity): string => {
-  let content = '=== HISTORIAL DE INTERACCIONES ===\n\n';
-  content += `Nombre del contacto: ${opportunity.contact.first_name} ${opportunity.contact.last_name}\n`;
-  content += `Título del contacto: ${opportunity.contact.title}\n`;
-  content += `Organización del contacto: ${opportunity.contact.organization}\n`;
-  content += `Tipo de contacto: Oportunidad\n`;
-  content += `Notas generales del cliente: ${opportunity.contact.notes}\n`;
-  content += `Estado de la opotunidad: ${opportunity.status}\n`;
-  content += `Solución propuesta en la opotunidad: ${opportunity.proposed_solution}\n`;
+const PROMPT_CUALIFICACION = `En base a la información contenida en el fichero adjunto, que incluye emails y notas de reuniones realizadas durante un proceso comercial de Gartner con un prospect, realiza el siguiente análisis:
 
-  const sortedMeetings = [...meetings].sort((a, b) =>
-    new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime()
-  );
+  1. Identificación y priorización de prioridades:
+    - Enumera las prioridades principales del prospect, priorizándolas por orden de relevancia.
+    - Para cada prioridad, verifica si se ha recopilado la siguiente información:
+          1. Título: claro y conciso (máx 60 caracteres)
+          2. Reto principal: Reto principal que aborda la iniciativa (máx 150 caracteres)
+          3. Valor: Valor que Gartner puede aportar con sus servicios
+          4. Coste: Coste que el prospect estima para la iniciativa 
+          5. Fecha límite: Fecha límite o deadline para la entrega de la iniciativa
+  2. Para cada una de las prioridades, identifica las iniciativas que el contacto haya mencionado que esté ejecutando o que vaya a ejecutar:
+      - Enumera las iniciativas del prospect, priorizándolas por orden de relevancia.
+      - Para cada iniciativa, verifica si se ha recopilado la siguiente información:
+          1. Título: claro y conciso (máx 60 caracteres)
+          2. Reto principal: Reto principal que aborda la iniciativa (máx 150 caracteres)
+          3. Valor: Valor que Gartner puede aportar con sus servicios
+          4. Coste: Coste que el prospect estima para la iniciativa 
+          5. Fecha límite: Fecha límite o deadline para la entrega de la iniciativa
+          6. Responsable: Responsable asignado de la iniciativa
+      - Para cada punto en el que falte información, indica preguntas concretas que se pueden realizar al prospect para obtener los datos necesarios, excepto para el punto de fecha límite (para este punto, si no hay fecha límite definida, indicar: Fecha límite no identificada)
 
-  sortedMeetings.forEach((meeting, index) => {
-    content += `\n${'='.repeat(80)}\n`;
-    content += `INTERACCIÓN ${index + 1}\n`;
-    content += `${'='.repeat(80)}\n`;
-    content += `Tipo: ${meeting.meeting_type}\n`;
-    content += `Fecha: ${formatDateTime(meeting.meeting_date)}\n`;
-    content += `Sensación: ${meeting.feeling}\n`;
-    content += `\nNotas:\n${'-'.repeat(80)}\n`;
-    content += `${meeting.notes || 'Sin notas'}\n`;
-  });
-
-  return content;
-};
-
-const analyzeWithGemini = async (notesContent: string, promptText: string): Promise<string> => {
-  const geminiKey = (window as any).__GEMINI_API_KEY__ || '';
-
-  if (!geminiKey) {
-    throw new Error('GEMINI_API_KEY no configurada. Por favor, configúrala en Settings.');
-  }
-
-  const fullPrompt = `${promptText}
-
-INFORMACIÓN DEL CLIENTE:
-${notesContent}`;
-
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: fullPrompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 20000,
+    2. Estructura de la respuesta:
+      Devuelve SOLO JSON (sin markdown):
+        {
+          "priorities": [
+            {
+              "priority_title": "Título",
+              "priority_challenge": "Reto principal",
+              "priority_gartner_value": "Valor",
+              "priority_cost": "Coste",
+              "priority_date": "Fecha límite",
+              "priority_detail_description": "Descripción detallada",
+              "initiatives": [
+                {
+                  "initiative_title": "Título",
+                  "initiative_challenge": "Reto principal",
+                  "initiative_gartner_value": "Valor",
+                  "initiative_cost": "Coste",
+                  "initiative_date": "Fecha límite",
+                  "initiative_detail_description": "Descripción detallada",
+                  "initiative_owner": "Responsable",
+                }
+              ]
+            }
+          ]
         }
-      }),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Error Gemini API: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
-      throw new Error('Respuesta inesperada de Gemini');
-    }
-
-    return data.candidates[0].content.parts[0].text;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('La solicitud tardó demasiado tiempo. Intenta de nuevo.');
-    }
-    throw new Error(`Error analizando con Gemini: ${err instanceof Error ? err.message : String(err)}`);
-  }
-};
+        Si no hay prioridades:
+        {
+          "priorities": []
+        }
+        Si no hay iniciativas:
+        {
+          "initiatives": []
+        }`;
 
 export default function OpportunityDetailPage() {
   const { toast } = useToast();
@@ -282,19 +258,27 @@ export default function OpportunityDetailPage() {
   const [geminiResult, setGeminiResult] = useState('');
   const [customPromptDialog, setCustomPromptDialog] = useState(false);
   const [customPrompt, setCustomPrompt] = useState('');
-  const [qualificationInitiatives, setQualificationInitiatives] = useState<Array<{
-    title: string;
-    challenge: string;
-    gartner_value: string;
-    cost: string;
-    date: string;
-    detail_description: string;
-    owner: string;
+  const [qualificationPriorities, setQualificationPriorities] = useState<Array<{
+    priority_title: string;
+    priority_challenge: string;
+    priority_gartner_value: string;
+    priority_cost: string;
+    priority_date: string;
+    priority_detail_description: string;
+    initiatives: Array<{
+      initiative_title: string;
+      initiative_challenge: string;
+      initiative_gartner_value: string;
+      initiative_cost: string;
+      initiative_date: string;
+      initiative_detail_description: string;
+      initiative_owner: string;
+    }>;
   }>>([]);
   const [qualificationLoading, setQualificationLoading] = useState(false);
   const [lastQualificationUpdate, setLastQualificationUpdate] = useState<string | null>(null);
-  const [selectedQualificationInitiative, setSelectedQualificationInitiative] = useState<any>(null);
-  const [qualificationDetailDialog, setQualificationDetailDialog] = useState(false);
+  const [selectedPriority, setSelectedPriority] = useState<any>(null);
+  const [priorityDetailDialog, setPriorityDetailDialog] = useState(false);
 
   const [meetingForm, setMeetingForm] = useState<MeetingForm>({
     contact_id: '',
@@ -399,40 +383,6 @@ ${notesContent}`;
     }
   };
 
-  const PROMPT_CUALIFICACION = `En base a la información contenida en el fichero adjunto, que incluye emails y notas de reuniones realizadas durante un proceso comercial de Gartner con un prospect, realiza el siguiente análisis:
-
-    1. Identificación y priorización de iniciativas:
-      - Enumera las iniciativas del prospect, priorizándolas por orden de relevancia.
-      - Para cada iniciativa, verifica si se ha recopilado la siguiente información:
-          1. Título: claro y conciso (máx 60 caracteres)
-          2. Reto principal: Reto principal que aborda la iniciativa (máx 150 caracteres)
-          3. Valor: Valor que Gartner puede aportar con sus servicios
-          4. Coste: Coste que el prospect estima para la iniciativa 
-          5. Fecha límite: Fecha límite o deadline para la entrega de la iniciativa
-          6. Responsable: Responsable asignado de la iniciativa
-      - Para cada punto en el que falte información, indica preguntas concretas que se pueden realizar al prospect para obtener los datos necesarios, excepto para el punto de fecha límite (para este punto, si no hay fecha límite definida, indicar: Fecha límite no identificada)
-
-    2. Estructura de la respuesta:
-      Devuelve SOLO JSON (sin markdown):
-        {
-          "initiatives": [
-            {
-              "title": "Título",
-              "challenge": "Reto principal",
-              "gartner_value": "Valor",
-              "cost": "Coste",
-              "date": "Fecha límite",
-              "detail_description": "Descripción detallada",
-              "owner": "Responsable",
-            }
-          ]
-        }
-
-        Si no hay iniciativas:
-        {
-          "initiatives": []
-        }`;
-
   useEffect(() => {
     if (id) {
       loadData();
@@ -458,7 +408,7 @@ ${notesContent}`;
       setContacts(contactsData);
       
       if (oppData?.qualification_initiatives) {
-        setQualificationInitiatives(oppData.qualification_initiatives);
+        setQualificationPriorities(oppData.qualification_initiatives);
         setLastQualificationUpdate(oppData.last_qualification_update);
       }
     } catch (error) {
@@ -493,9 +443,9 @@ ${notesContent}`;
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
-      const extractedInitiatives = parsed.initiatives || [];
+      const extractedPriorities = parsed.priorities || [];
 
-      setQualificationInitiatives(extractedInitiatives);
+      setQualificationPriorities(extractedPriorities);
       setLastQualificationUpdate(new Date().toISOString());
 
       try {
@@ -504,17 +454,21 @@ ${notesContent}`;
           status: opportunity!.status,
           proposed_solution: opportunity!.proposed_solution,
           offer_presented: opportunity!.offer_presented,
-          qualification_initiatives: extractedInitiatives,
+          qualification_initiatives: extractedPriorities,
           last_qualification_update: new Date().toISOString()
         });
-        console.log('💾 Iniciativas guardadas en base de datos');
+        console.log('💾 Prioridades guardadas en base de datos');
       } catch (dbError) {
         console.error('Error guardando en BD:', dbError);
       }
 
+      const totalInitiatives = extractedPriorities.reduce((sum: number, priority: any) => 
+        sum + (priority.initiatives?.length || 0), 0
+      );
+
       toast({
         title: 'Análisis completado',
-        description: `Se encontraron ${extractedInitiatives.length} iniciativa(s) para cualificar`,
+        description: `Se encontraron ${extractedPriorities.length} prioridad(es) con ${totalInitiatives} iniciativa(s)`,
       });
     } catch (error) {
       console.error('Error analizando cualificación:', error);
@@ -793,7 +747,7 @@ ${notesContent}`;
     );
   }
 
-  const hasInitiatives = (qualificationInitiatives?.length ?? 0) > 0;
+  const hasPriorities = (qualificationPriorities?.length ?? 0) > 0;
 
   return (
     <div className="container mx-auto py-6 px-4">
@@ -909,7 +863,7 @@ ${notesContent}`;
             )}
             {opportunity.contact.linkedin_url && (
               <div className="flex items-center gap-2">
-                <a
+              <a  
                   href={opportunity.contact.linkedin_url}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -934,7 +888,7 @@ ${notesContent}`;
                   <p className="text-slate-600 mb-1">{opportunity.contact.pa_name}</p>
                 )}
                 {opportunity.contact.pa_email && (
-                  <a
+                  <a 
                     href={`mailto:${opportunity.contact.pa_email}`}
                     className="text-blue-600 hover:underline flex items-center gap-2"
                   >
@@ -943,7 +897,7 @@ ${notesContent}`;
                   </a>
                 )}
                 {opportunity.contact.pa_phone && (
-                  <a
+                  <a 
                     href={`tel:${opportunity.contact.pa_phone}`}
                     className="text-blue-600 hover:underline flex items-center gap-2"
                   >
@@ -1131,11 +1085,11 @@ ${notesContent}`;
             <div className="border-l border-indigo-200 pl-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-700">
-                  Iniciativas para Cualificar (PACT)
+                  Prioridades del Prospect (PACT)
                 </h3>
 
                 <div className="flex items-center gap-2">
-                  {lastQualificationUpdate && hasInitiatives && (
+                  {lastQualificationUpdate && hasPriorities && (
                     <p className="text-xs italic text-slate-500">
                       Última actualización: {new Date(lastQualificationUpdate).toLocaleDateString('es-ES', {
                         day: 'numeric',
@@ -1144,7 +1098,7 @@ ${notesContent}`;
                       })}
                     </p>
                   )}
-                  {hasInitiatives && (
+                  {hasPriorities && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -1170,10 +1124,10 @@ ${notesContent}`;
               </div>
 
               <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                {qualificationInitiatives.length === 0 ? (
+                {qualificationPriorities.length === 0 ? (
                   <div className="text-center py-6">
                     <p className="text-sm text-slate-500 mb-2">
-                      No hay iniciativas analizadas
+                      No hay prioridades analizadas
                     </p>
                     <Button
                       size="sm"
@@ -1187,39 +1141,48 @@ ${notesContent}`;
                       ) : (
                         <Sparkles className="mr-2 h-3 w-3 text-indigo-500" />
                       )}
-                      Cualificar Iniciativas del prospect (PACT)
+                      Cualificar Prioridades del prospect (PACT)
                     </Button>
                   </div>
                 ) : (
-                  qualificationInitiatives.map((initiative, index) => (
+                  qualificationPriorities.map((priority, index) => (
                     <div
                       key={index}
                       className="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer"
                       onClick={() => {
-                        setSelectedQualificationInitiative(initiative);
-                        setQualificationDetailDialog(true);
+                        setSelectedPriority(priority);
+                        setPriorityDetailDialog(true);
                       }}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <h4 className="text-sm font-medium text-slate-800 line-clamp-2">
-                          {initiative.title}
+                        <h4 className="text-sm font-medium text-slate-800 line-clamp-2 flex-1">
+                          {priority.priority_title}
                         </h4>
-                        {initiative.date && (
-                        <Badge
-                          variant="outline"
-                            className={`text-xs shrink-0 ${
-                                initiative.date === "Fecha límite no identificada" ? "border-red-500 text-red-700 dark:text-red-400" :
-                                ""
-                            }`}
-                        >
-                          {initiative?.date ?? "—"}
-                        </Badge>
-
-                        )}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {priority.priority_date && (
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${
+                                priority.priority_date === "Fecha límite no identificada" 
+                                  ? "border-red-500 text-red-700 dark:text-red-400" 
+                                  : ""
+                              }`}
+                            >
+                              {priority.priority_date}
+                            </Badge>
+                          )}
+                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-600 line-clamp-2">
-                        {initiative.challenge}
+                      <p className="text-xs text-slate-600 line-clamp-2 mb-2">
+                        {priority.priority_challenge}
                       </p>
+                      {priority.initiatives && priority.initiatives.length > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-indigo-600">
+                          <ClipboardList className="h-3 w-3" />
+                          <span>{priority.initiatives.length} iniciativa(s)</span>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -1641,67 +1604,127 @@ ${notesContent}`;
         </DialogContent>
       </Dialog>
 
-      <Dialog open={qualificationDetailDialog} onOpenChange={setQualificationDetailDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={priorityDetailDialog} onOpenChange={setPriorityDetailDialog}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-800">
-              {selectedQualificationInitiative?.title}
+              {selectedPriority?.priority_title}
             </DialogTitle>
           </DialogHeader>
 
-          {selectedQualificationInitiative && (
-            <div className="space-y-4">
-              {selectedQualificationInitiative.detail_description && (
+          {selectedPriority && (
+            <div className="space-y-6">
+              {selectedPriority.priority_detail_description && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
                     <ClipboardList className="h-4 w-4 text-blue-600" />
-                    Descripción Detallada
+                    Descripción Detallada de la Prioridad
                   </h3>
                   <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                    {selectedQualificationInitiative.detail_description}
+                    {selectedPriority.priority_detail_description}
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-3 gap-4">
                 <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-200">
                   <h3 className="text-xs font-semibold text-slate-700 mb-1">Reto Principal</h3>
                   <p className="text-sm text-slate-700">
-                    {selectedQualificationInitiative.challenge || 'No especificado'}
+                    {selectedPriority.priority_challenge || 'No especificado'}
                   </p>
                 </div>
 
-                <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                  <h3 className="text-xs font-semibold text-slate-700 mb-1">Responsable</h3>
-                  <p className="text-sm text-slate-700">
-                    {selectedQualificationInitiative.owner || 'No especificado'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
                   <h3 className="text-xs font-semibold text-slate-700 mb-1">Coste Estimado</h3>
                   <p className="text-sm text-slate-700">
-                    {selectedQualificationInitiative.cost || 'No especificado'}
+                    {selectedPriority.priority_cost || 'No especificado'}
                   </p>
                 </div>
 
                 <div className="bg-red-50 p-3 rounded-lg border border-red-200">
                   <h3 className="text-xs font-semibold text-slate-700 mb-1">Fecha Límite</h3>
                   <p className="text-sm text-slate-700">
-                    {selectedQualificationInitiative.date || 'No especificada'}
+                    {selectedPriority.priority_date || 'No especificada'}
                   </p>
                 </div>
               </div>
 
-              {selectedQualificationInitiative.gartner_value && (
+              {selectedPriority.priority_gartner_value && (
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                   <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-purple-600" />
                     Valor que Gartner Puede Aportar
                   </h3>
                   <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                    {selectedQualificationInitiative.gartner_value}
+                    {selectedPriority.priority_gartner_value}
+                  </div>
+                </div>
+              )}
+
+              {selectedPriority.initiatives && selectedPriority.initiatives.length > 0 && (
+                <div className="border-t border-slate-200 pt-6">
+                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                    <ClipboardList className="h-5 w-5 text-indigo-600" />
+                    Iniciativas ({selectedPriority.initiatives.length})
+                  </h3>
+                  <div className="space-y-4">
+                    {selectedPriority.initiatives.map((initiative: any, index: number) => (
+                      <div key={index} className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h4 className="text-base font-semibold text-slate-800 mb-3">
+                          {initiative.initiative_title}
+                        </h4>
+
+                        {initiative.initiative_detail_description && (
+                          <div className="mb-3 bg-white p-3 rounded border border-slate-200">
+                            <p className="text-xs font-semibold text-slate-600 mb-1">Descripción</p>
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                              {initiative.initiative_detail_description}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <p className="text-xs font-semibold text-slate-600 mb-1">Reto</p>
+                            <p className="text-sm text-slate-700">
+                              {initiative.initiative_challenge || 'No especificado'}
+                            </p>
+                          </div>
+
+                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <p className="text-xs font-semibold text-slate-600 mb-1">Responsable</p>
+                            <p className="text-sm text-slate-700">
+                              {initiative.initiative_owner || 'No especificado'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <p className="text-xs font-semibold text-slate-600 mb-1">Coste</p>
+                            <p className="text-sm text-slate-700">
+                              {initiative.initiative_cost || 'No especificado'}
+                            </p>
+                          </div>
+
+                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <p className="text-xs font-semibold text-slate-600 mb-1">Fecha Límite</p>
+                            <p className="text-sm text-slate-700">
+                              {initiative.initiative_date || 'No especificada'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {initiative.initiative_gartner_value && (
+                          <div className="mt-3 bg-purple-50 p-3 rounded border border-purple-200">
+                            <p className="text-xs font-semibold text-slate-700 mb-1">Valor Gartner</p>
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                              {initiative.initiative_gartner_value}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -1712,36 +1735,50 @@ ${notesContent}`;
             <Button
               variant="outline"
               onClick={() => {
-                const content = `
-                INICIATIVA: ${selectedQualificationInitiative?.title}
+                let content = `PRIORIDAD: ${selectedPriority?.priority_title}\n\n`;
+                
+                if (selectedPriority?.priority_detail_description) {
+                  content += `DESCRIPCIÓN:\n${selectedPriority.priority_detail_description}\n\n`;
+                }
+                
+                content += `RETO PRINCIPAL: ${selectedPriority?.priority_challenge || 'No especificado'}\n`;
+                content += `COSTE ESTIMADO: ${selectedPriority?.priority_cost || 'No especificado'}\n`;
+                content += `FECHA LÍMITE: ${selectedPriority?.priority_date || 'No especificada'}\n\n`;
+                
+                if (selectedPriority?.priority_gartner_value) {
+                  content += `VALOR GARTNER:\n${selectedPriority.priority_gartner_value}\n\n`;
+                }
 
-                RETO PRINCIPAL:
-                ${selectedQualificationInitiative?.challenge || 'No especificado'}
+                if (selectedPriority?.initiatives && selectedPriority.initiatives.length > 0) {
+                  content += `\n${'='.repeat(60)}\nINICIATIVAS (${selectedPriority.initiatives.length})\n${'='.repeat(60)}\n\n`;
+                  
+                  selectedPriority.initiatives.forEach((initiative: any, index: number) => {
+                    content += `INICIATIVA ${index + 1}: ${initiative.initiative_title}\n`;
+                    if (initiative.initiative_detail_description) {
+                      content += `Descripción: ${initiative.initiative_detail_description}\n`;
+                    }
+                    content += `Reto: ${initiative.initiative_challenge || 'No especificado'}\n`;
+                    content += `Responsable: ${initiative.initiative_owner || 'No especificado'}\n`;
+                    content += `Coste: ${initiative.initiative_cost || 'No especificado'}\n`;
+                    content += `Fecha: ${initiative.initiative_date || 'No especificada'}\n`;
+                    if (initiative.initiative_gartner_value) {
+                      content += `Valor Gartner: ${initiative.initiative_gartner_value}\n`;
+                    }
+                    content += '\n';
+                  });
+                }
 
-                RESPONSABLE: ${selectedQualificationInitiative?.owner || 'No especificado'}
-
-                COSTE ESTIMADO: ${selectedQualificationInitiative?.cost || 'No especificado'}
-
-                FECHA LÍMITE: ${selectedQualificationInitiative?.date || 'No especificada'}
-
-                DESCRIPCIÓN DETALLADA:
-                ${selectedQualificationInitiative?.detail_description || 'No especificada'}
-
-                VALOR QUE GARTNER PUEDE APORTAR:
-                ${selectedQualificationInitiative?.gartner_value || 'No especificado'}
-                `.trim();
-
-                navigator.clipboard.writeText(content);
+                navigator.clipboard.writeText(content.trim());
                 toast({
                   title: 'Copiado',
-                  description: 'Iniciativa copiada al portapapeles',
+                  description: 'Prioridad e iniciativas copiadas al portapapeles',
                 });
               }}
             >
               <Copy className="mr-2 h-4 w-4" />
-              Copiar
+              Copiar Todo
             </Button>
-            <Button onClick={() => setQualificationDetailDialog(false)}>
+            <Button onClick={() => setPriorityDetailDialog(false)}>
               Cerrar
             </Button>
           </DialogFooter>
