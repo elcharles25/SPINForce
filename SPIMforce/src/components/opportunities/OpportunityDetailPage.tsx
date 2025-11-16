@@ -1608,17 +1608,17 @@ ${notesContent}`;
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-800">
-              {selectedPriority?.priority_title}
+              Prioridad: {selectedPriority?.priority_title}
             </DialogTitle>
           </DialogHeader>
 
           {selectedPriority && (
-            <div className="space-y-6">
+            <div className="space-y-3">
               {selectedPriority.priority_detail_description && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
                     <ClipboardList className="h-4 w-4 text-blue-600" />
-                    Descripción Detallada de la Prioridad
+                    Descripción detallada de la Prioridad
                   </h3>
                   <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
                     {selectedPriority.priority_detail_description}
@@ -1626,23 +1626,23 @@ ${notesContent}`;
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-200">
-                  <h3 className="text-xs font-semibold text-slate-700 mb-1">Reto Principal</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h3 className="text-xs font-semibold text-slate-700 mb-1">Reto principal</h3>
                   <p className="text-sm text-slate-700">
                     {selectedPriority.priority_challenge || 'No especificado'}
                   </p>
                 </div>
 
-                <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
-                  <h3 className="text-xs font-semibold text-slate-700 mb-1">Coste Estimado</h3>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h3 className="text-xs font-semibold text-slate-700 mb-1">Coste estimado</h3>
                   <p className="text-sm text-slate-700">
                     {selectedPriority.priority_cost || 'No especificado'}
                   </p>
                 </div>
 
-                <div className="bg-red-50 p-3 rounded-lg border border-red-200">
-                  <h3 className="text-xs font-semibold text-slate-700 mb-1">Fecha Límite</h3>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h3 className="text-xs font-semibold text-slate-700 mb-1">Fecha límite</h3>
                   <p className="text-sm text-slate-700">
                     {selectedPriority.priority_date || 'No especificada'}
                   </p>
@@ -1650,10 +1650,10 @@ ${notesContent}`;
               </div>
 
               {selectedPriority.priority_gartner_value && (
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-purple-600" />
-                    Valor que Gartner Puede Aportar
+                    Valor que Gartner puede aportar
                   </h3>
                   <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
                     {selectedPriority.priority_gartner_value}
@@ -1662,7 +1662,7 @@ ${notesContent}`;
               )}
 
               {selectedPriority.initiatives && selectedPriority.initiatives.length > 0 && (
-                <div className="border-t border-slate-200 pt-6">
+                <div className="border-t border-slate-200 pt-4">
                   <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
                     <ClipboardList className="h-5 w-5 text-indigo-600" />
                     Iniciativas ({selectedPriority.initiatives.length})
@@ -1684,30 +1684,51 @@ ${notesContent}`;
                         )}
 
                         <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <div
+                                className={`bg-white p-2 rounded border ${
+                                  /[¿?]/.test(initiative?.initiative_challenge ?? '')
+                                  ? 'border-red-500 bg-red-50'
+                                  : 'border-slate-200 bg-white'
+                                }`}
+                              >
                             <p className="text-xs font-semibold text-slate-600 mb-1">Reto</p>
                             <p className="text-sm text-slate-700">
                               {initiative.initiative_challenge || 'No especificado'}
                             </p>
                           </div>
-
-                          <div className="bg-white p-2 rounded border border-slate-200">
+                          <div
+                              className={`p-2 rounded border ${
+                                /[¿?]/.test(initiative?.initiative_owner ?? '')
+                                  ? 'border-red-500 bg-red-50'
+                                  : 'border-slate-200 bg-white'
+                              }`}
+                              >
                             <p className="text-xs font-semibold text-slate-600 mb-1">Responsable</p>
                             <p className="text-sm text-slate-700">
                               {initiative.initiative_owner || 'No especificado'}
                             </p>
                           </div>
                         </div>
-
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-white p-2 rounded border border-slate-200">
+                          <div
+                              className={`p-2 rounded border ${
+                                /[¿?]/.test(initiative?.initiative_cost ?? '')
+                                  ? 'border-red-500 bg-red-50'
+                                  : 'border-slate-200 bg-white'
+                              }`}
+                              >
                             <p className="text-xs font-semibold text-slate-600 mb-1">Coste</p>
                             <p className="text-sm text-slate-700">
                               {initiative.initiative_cost || 'No especificado'}
                             </p>
                           </div>
-
-                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <div
+                              className={`p-2 rounded border ${
+                                /[no identificada]/.test(initiative?.initiative_date ?? '')
+                                  ? 'border-red-500 bg-red-50'
+                                  : 'border-slate-200 bg-white'
+                              }`}
+                              >
                             <p className="text-xs font-semibold text-slate-600 mb-1">Fecha Límite</p>
                             <p className="text-sm text-slate-700">
                               {initiative.initiative_date || 'No especificada'}
@@ -1716,7 +1737,7 @@ ${notesContent}`;
                         </div>
 
                         {initiative.initiative_gartner_value && (
-                          <div className="mt-3 bg-purple-50 p-3 rounded border border-purple-200">
+                          <div className="mt-3 bg-white p-3 rounded border border-slate-200">
                             <p className="text-xs font-semibold text-slate-700 mb-1">Valor Gartner</p>
                             <p className="text-sm text-slate-700 whitespace-pre-wrap">
                               {initiative.initiative_gartner_value}
