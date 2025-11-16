@@ -290,6 +290,9 @@ const handleDelete = async () => {
         value={formData[`email_${num}_subject` as keyof typeof formData] as string}
         onChange={(e) => setFormData({ ...formData, [`email_${num}_subject`]: e.target.value })}
       />
+      <p className="text-sm text-muted-foreground mt-1">
+            Variables disponibles: {"{{nombre}}"}, {"{{ano}}"}, {"{{anosiguiente}}"}, {"{{compania}}"}
+      </p>
     </div>
     <div>
       <Label htmlFor={`email_${num}_html`}>HTML</Label>
@@ -300,6 +303,9 @@ const handleDelete = async () => {
         rows={6}
         className="font-mono text-sm"
       />
+      <p className="text-sm text-muted-foreground mt-1">
+            Variables disponibles: {"{{nombre}}"}, {"{{nombreAE}}"}, {"{{ano}}"}, {"{{anosiguiente}}"}, {"{{compania}}"}
+      </p>
     </div>
     
     <div>

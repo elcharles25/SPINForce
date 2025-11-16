@@ -739,13 +739,13 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">Webinars e Emails masivos</h1>
+          <h1 className="text-3xl font-bold text-foreground">Webinars y Emails masivos</h1>
         </div>
 
         <Tabs defaultValue="distributions" className="w-full">
           <TabsList className="inline-flex gap-2">
             <TabsTrigger value="distributions">Distribuciones de Webinars</TabsTrigger>
-            <TabsTrigger value="mass-email">Emails Masivos</TabsTrigger>
+            <TabsTrigger value="mass-email">Emails masivos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="distributions" className="space-y-6">
@@ -755,7 +755,7 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
                 className="rounded-full shadow-sm hover:shadow-md transition-shadow hover:bg-indigo-100"
                 onClick={() => setShowEmailEditor(true)}>
                 <Settings className="h-4 w-4 mr-2" />
-                Configurar email de Webinars
+                Editar email de Webinars
               </Button>
             </div>
 

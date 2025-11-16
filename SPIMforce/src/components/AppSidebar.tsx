@@ -18,7 +18,7 @@ const mainItems = [
   { title: "Contactos", url: "/crm", icon: Users }, 
   { title: "Campañas", url: "/campaigns", icon: Target },
   { title: "Oportunidades", url: "/opportunities", icon: Briefcase },
-  { title: "Webinars e Emails", url: "/webinars", icon: CalendarCheck },
+  { title: "Webinars y emails", url: "/webinars", icon: CalendarCheck },
 ];
 
 const settingsItem = { title: "Configuración", url: "/settings", icon: Settings };

@@ -61,6 +61,9 @@ export function WebinarEmailEditor() {
             value={emailConfig.subject}
             onChange={(e) => setEmailConfig({ ...emailConfig, subject: e.target.value })}
           />
+          <p className="text-sm text-muted-foreground mt-1">
+            Variables disponibles: {"{{mes}}"}, {"{{anio}}"}
+          </p>
         </div>
         <div>
           <Label htmlFor="html">Plantilla HTML</Label>
