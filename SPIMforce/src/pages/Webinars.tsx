@@ -509,7 +509,7 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
 
         <Card>
           <CardHeader>
-            <CardTitle>Cargar Nuevo Webinar</CardTitle>
+            <CardTitle>Enviar nueva distribucuión</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -571,7 +571,7 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    Analizar y enviar Distribución
+                    Analizar y enviar webinars
                   </>
                 )}
               </Button>
@@ -581,7 +581,7 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
 
         <Card>
           <CardHeader>
-            <CardTitle>Distribuciones de Webinars</CardTitle>
+            <CardTitle>Webinars enviados</CardTitle>
           </CardHeader>
           <CardContent>
             {distributions.length === 0 ? (
