@@ -707,7 +707,7 @@ const Dashboard = () => {
             <CardContent>
               <div className="text-3xl font-bold">{metrics.webinars.total}</div>
               <div className="flex justify-center gap-2 mt-3">
-                <Badge variant="outline" className="text-xs hover:bg-indigo-200">
+                <Badge variant="outline" className="text-xs">
                   {metrics.webinars.sent} enviados
                 </Badge>
                 <Badge variant="outline" className="text-xs">
@@ -1022,10 +1022,10 @@ const Dashboard = () => {
               ) : (
                 <>
                 <div className="flex justify-center gap-2">
-                  <Badge variant="outline" className="text-xs bg-indigo-50">
+                  <Badge variant="outline" className="text-xs bg-gradient-to-br from-indigo-50 to-white">
                   Tasa de conversión: {formatPercentage(metrics.opportunities.wonOpportunitiesCount)}
                 </Badge>
-                <Badge variant="outline" className="text-xs bg-indigo-50">
+                <Badge variant="outline" className="text-xs bg-gradient-to-br from-indigo-50 to-white">
                   Reuniones por oportunidad: {metrics.opportunities.averageMeetingsPerOpp.toFixed(1)}                
                 </Badge>
                 </div>
