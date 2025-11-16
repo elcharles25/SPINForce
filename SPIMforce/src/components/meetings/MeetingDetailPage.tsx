@@ -463,14 +463,18 @@ const handleSubmit = async (e: React.FormEvent) => {
                 type="button"
                 variant="destructive"
                 onClick={handleDelete}
-                className="mr-auto"
+                className="mr-auto rounded-full"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              <Button type="button" 
+                className="rounded-full"
+                variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">Actualizar</Button>
+              <Button 
+              className="rounded-full shadow-sm hover:shadow-md transition-shadow bg-indigo-500 hover:bg-indigo-600"
+              type="submit">Actualizar</Button>
             </div>
           </form>
         </DialogContent>

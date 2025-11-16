@@ -4,7 +4,7 @@ import { db } from "@/lib/db-adapter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Target, TrendingUp, Mail, CircleArrowRight, XCircle, Clock, Building2, Zap, Award, Activity, Briefcase, CalendarCheck, CircleCheckBig, CircleOff } from "lucide-react";
+import { Users, Target, TrendingUp, Mail, CircleArrowRight, XCircle, Clock, Building2, Zap, Award, Activity, Briefcase, CalendarCheck, CircleCheckBig, CircleOff, AlertCircle } from "lucide-react";
 import { Bar } from "react-chartjs-2";
 import { formatDateTime } from "@/utils/dateFormatter";
 
@@ -52,6 +52,11 @@ interface DashboardMetrics {
     totalMeetings: number;
     averageMeetingsPerOpp: number;
     wonOpportunitiesCount: number;
+    staleOpportunities: Array<{
+      id: string;
+      organization: string;
+      contactName: string;
+    }>;
   };
   webinars: {
     total: number;
@@ -316,6 +321,14 @@ const Dashboard = () => {
       const opportunitiesByStatus: Record<string, number> = {};
       let withOfferCount = 0;
       let totalMeetings = 0;
+      const staleOpportunitiesList: Array<{
+        id: string;
+        organization: string;
+        contactName: string;
+      }> = [];
+
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
       for (const opp of opportunities) {
         opportunitiesByStatus[opp.status] = (opportunitiesByStatus[opp.status] || 0) + 1;
@@ -327,9 +340,35 @@ const Dashboard = () => {
         if (opp.offer_presented) {
           withOfferCount++;
         }
+
         try {
           const meetings = await db.getMeetingsByOpportunity(opp.id);
-          totalMeetings += meetings.length;
+          
+          const filteredMeetings = meetings.filter(
+            (meeting: any) => 
+              meeting.meeting_type !== 'Email' && 
+              meeting.meeting_type !== 'Teléfono'
+          );
+
+          totalMeetings += filteredMeetings.length;
+
+          if (filteredMeetings.length > 0) {
+            const sortedMeetings = [...filteredMeetings].sort((a: any, b: any) => {
+              const dateA = parseFlexibleDate(a.meeting_date).getTime();
+              const dateB = parseFlexibleDate(b.meeting_date).getTime();
+              return dateB - dateA;
+            });
+
+            const lastMeetingDate = parseFlexibleDate(sortedMeetings[0].meeting_date);
+            
+            if (lastMeetingDate < oneMonthAgo) {
+              staleOpportunitiesList.push({
+                id: opp.id,
+                organization: opp.contact.organization,
+                contactName: `${opp.contact.first_name} ${opp.contact.last_name}`
+              });
+            }
+          }
         } catch (error) {
           console.error(`Error loading meetings for opportunity ${opp.id}:`, error);
         }
@@ -487,6 +526,7 @@ const Dashboard = () => {
           totalMeetings,
           averageMeetingsPerOpp,
           wonOpportunitiesCount,
+          staleOpportunities: staleOpportunitiesList,
         },
         webinars: {
           total: distributions.length,
@@ -603,7 +643,7 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{metrics.contacts.total}</div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 justify-center mt-3">
                 <Badge variant="outline" className="text-xs bg-green-100 text-green-700">
                   {metrics.contacts.interested} interesados
                 </Badge>
@@ -624,7 +664,7 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{metrics.campaigns.active}</div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex justify-center gap-2 mt-3">
                 <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-200">
                   {metrics.campaigns.replied} respondidas
                 </Badge>
@@ -645,12 +685,12 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{metrics.opportunities.total}</div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex justify-center gap-2 mt-3">
                 <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-200">
                   {metrics.opportunities.withOffer} con oferta
                 </Badge>
-                <Badge variant="outline" className="text-xs">
-                  {metrics.opportunities.totalMeetings} reuniones
+                <Badge variant="outline" className="text-xs bg-amber-50 border-amber-200 text-amber-900">
+                  {metrics.opportunities.staleOpportunities.length} sin actividad
                 </Badge>
               </div>
             </CardContent>
@@ -666,8 +706,8 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{metrics.webinars.total}</div>
-              <div className="flex gap-2 mt-3">
-                <Badge className="text-xs bg-green-100 text-green-700 border-green-200">
+              <div className="flex justify-center gap-2 mt-3">
+                <Badge variant="outline" className="text-xs hover:bg-indigo-200">
                   {metrics.webinars.sent} enviados
                 </Badge>
                 <Badge variant="outline" className="text-xs">
@@ -981,21 +1021,44 @@ const Dashboard = () => {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center p-6 bg-gradient-to-br from-indigo-50 to-white rounded-lg border border-indigo-100">
-                      <div className="text-xl font-bold">
-                        {formatPercentage(metrics.opportunities.wonOpportunitiesCount)}
+                <div className="flex justify-center gap-2">
+                  <Badge variant="outline" className="text-xs bg-indigo-50">
+                  Tasa de conversión: {formatPercentage(metrics.opportunities.wonOpportunitiesCount)}
+                </Badge>
+                <Badge variant="outline" className="text-xs bg-indigo-50">
+                  Reuniones por oportunidad: {metrics.opportunities.averageMeetingsPerOpp.toFixed(1)}                
+                </Badge>
+                </div>
+                  {metrics.opportunities.staleOpportunities.length > 0 && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-amber-900">
+                            {metrics.opportunities.staleOpportunities.length} oportunidad{metrics.opportunities.staleOpportunities.length !== 1 ? 'es' : ''} sin actividad
+                          </p>
+                          </div>
+                        </div>
+                          <p className="text-xs text-amber-700 mt-1 mb-2">
+                            {metrics.opportunities.staleOpportunities.length === 1 
+                              ? 'Esta oportunidad no tiene reuniones' 
+                              : 'Estas oportunidades no tienen reuniones'} en más de 1 mes:
+                          </p>
+                          <div className="space-y-1">
+                            {metrics.opportunities.staleOpportunities.map((opp) => (
+                              <div 
+                                key={opp.id}
+                                className="flex items-center gap-2 text-xs bg-white p-2 rounded border border-amber-200 cursor-pointer hover:bg-amber-50 transition-colors"
+                                onClick={() => navigate(`/opportunities/${opp.id}`)}
+                              >
+                                <span className="font-medium text-amber-900">{opp.organization}</span>
+                                <span className="text-amber-700">-</span>
+                                <span className="text-amber-700">{opp.contactName}</span>
+                              </div>
+                            ))}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">Tasa de conversión</div>
                     </div>
-                    <div className="text-center p-6 bg-gradient-to-br from-indigo-50 to-white rounded-lg border border-indigo-100">
-                      <div className="text-xl font-bold">
-                        {metrics.opportunities.averageMeetingsPerOpp.toFixed(1)}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">Media de reuniones por oportunidad</div>
-                    </div>
-                  </div>
-
+                  )}
                   <div className="space-y-3">
                     {statusOrder.map(status => {
                       const count = metrics.opportunities.byStatus[status] || 0;
