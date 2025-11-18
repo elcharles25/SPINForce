@@ -188,7 +188,7 @@ const PROMPT_CUALIFICACION = `En base a la información contenida en el fichero 
     - Para cada prioridad, verifica si se ha recopilado la siguiente información:
           1. Título: claro y conciso (máx 60 caracteres)
           2. Reto principal: Reto principal que aborda la iniciativa (máx 150 caracteres)
-          3. Valor: Valor que Gartner puede aportar con sus servicios
+          3. Valor: Valor que Gartner puede aportar con sus servicios (en base a la información recopilada y al contexto que tengas de los servicios de Gartner)
           4. Coste: Coste que el prospect estima para la iniciativa 
           5. Fecha límite: Fecha límite o deadline para la entrega de la iniciativa
   2. Para cada una de las prioridades, identifica las iniciativas que el contacto haya mencionado que esté ejecutando o que vaya a ejecutar:
@@ -196,11 +196,11 @@ const PROMPT_CUALIFICACION = `En base a la información contenida en el fichero 
       - Para cada iniciativa, verifica si se ha recopilado la siguiente información:
           1. Título: claro y conciso (máx 60 caracteres)
           2. Reto principal: Reto principal que aborda la iniciativa (máx 150 caracteres)
-          3. Valor: Valor que Gartner puede aportar con sus servicios
+          3. Valor: Valor que Gartner puede aportar con sus servicios (en base a la información recopilada y al contexto que tengas de los servicios de Gartner)
           4. Coste: Coste que el prospect estima para la iniciativa 
           5. Fecha límite: Fecha límite o deadline para la entrega de la iniciativa
           6. Responsable: Responsable asignado de la iniciativa
-      - Para cada punto en el que falte información, indica preguntas concretas que se pueden realizar al prospect para obtener los datos necesarios, excepto para el punto de fecha límite (para este punto, si no hay fecha límite definida, indicar: Fecha límite no identificada)
+      - Para cada punto en el que falte información, indicar: No identificada
 
     2. Estructura de la respuesta:
       Devuelve SOLO JSON (sin markdown):
@@ -748,6 +748,10 @@ ${notesContent}`;
   }
 
   const hasPriorities = (qualificationPriorities?.length ?? 0) > 0;
+
+  //const foundGartnerValue = initiative.initiative_gartner_value ?? '';
+  //const isNoIdentificado = /^\s*no identificad[oa]\.?\s*$/i.test(foundGartnerValue);
+
 
   return (
     <div className="container mx-auto py-6 px-4">
@@ -1633,15 +1637,25 @@ ${notesContent}`;
                     {selectedPriority.priority_challenge || 'No especificado'}
                   </p>
                 </div>
-
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div
+                    className={`bg-blue-50 p-4 rounded-lg border border-blue-200 ${
+                      /^\s*no identificad[oa]\.?\s*$/i.test(selectedPriority.priority_cost ?? '')
+                        ? 'border-red-500'
+                        : 'border-slate-200 bg-white'
+                    }`}
+                    >
                   <h3 className="text-xs font-semibold text-slate-700 mb-1">Coste estimado</h3>
                   <p className="text-sm text-slate-700">
                     {selectedPriority.priority_cost || 'No especificado'}
                   </p>
                 </div>
-
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div
+                    className={`bg-blue-50 p-4 rounded-lg border border-blue-200 ${
+                      /^\s*no identificad[oa]\.?\s*$/i.test(selectedPriority.priority_date ?? '')
+                        ? 'border-red-500'
+                        : 'border-slate-200 bg-white'
+                    }`}
+                    >
                   <h3 className="text-xs font-semibold text-slate-700 mb-1">Fecha límite</h3>
                   <p className="text-sm text-slate-700">
                     {selectedPriority.priority_date || 'No especificada'}
@@ -1686,8 +1700,8 @@ ${notesContent}`;
                         <div className="grid grid-cols-2 gap-3 mb-3">
                             <div
                                 className={`bg-white p-2 rounded border ${
-                                  /[¿?]/.test(initiative?.initiative_challenge ?? '')
-                                  ? 'border-red-500 bg-red-50'
+                                  /^\s*no identificad[oa]\.?\s*$/i.test(initiative?.initiative_challenge ?? '')
+                                  ? 'border-red-500'
                                   : 'border-slate-200 bg-white'
                                 }`}
                               >
@@ -1698,8 +1712,8 @@ ${notesContent}`;
                           </div>
                           <div
                               className={`p-2 rounded border ${
-                                /[¿?]/.test(initiative?.initiative_owner ?? '')
-                                  ? 'border-red-500 bg-red-50'
+                                /^\s*no identificad[oa]\.?\s*$/i.test(initiative?.initiative_owner ?? '')
+                                  ? 'border-red-500'
                                   : 'border-slate-200 bg-white'
                               }`}
                               >
@@ -1712,8 +1726,8 @@ ${notesContent}`;
                         <div className="grid grid-cols-2 gap-3">
                           <div
                               className={`p-2 rounded border ${
-                                /[¿?]/.test(initiative?.initiative_cost ?? '')
-                                  ? 'border-red-500 bg-red-50'
+                                /^\s*no identificad[oa]\.?\s*$/i.test(initiative?.initiative_cost ?? '')
+                                  ? 'border-red-500'
                                   : 'border-slate-200 bg-white'
                               }`}
                               >
@@ -1724,8 +1738,8 @@ ${notesContent}`;
                           </div>
                             <div
                               className={`p-2 rounded border ${
-                                /[no identificada]/.test(initiative?.initiative_date ?? '')
-                                  ? 'border-red-500 bg-red-50'
+                                /^\s*no identificad[oa]\.?\s*$/i.test(initiative?.initiative_date ?? '')
+                                  ? 'border-red-500'
                                   : 'border-slate-200 bg-white'
                               }`}
                               >
@@ -1737,7 +1751,13 @@ ${notesContent}`;
                         </div>
 
                         {initiative.initiative_gartner_value && (
-                          <div className="mt-3 bg-white p-3 rounded border border-slate-200">
+                          <div
+                              className={`p-3 rounded border mt-3 ${
+                                /^\s*no identificad[oa]\.?\s*$/i.test(initiative.initiative_gartner_value ?? '')
+                                  ? 'border-red-500 bg-red-50'
+                                  : 'border-slate-200 bg-white'
+                              }`}
+                              >
                             <p className="text-xs font-semibold text-slate-700 mb-1">Valor Gartner</p>
                             <p className="text-sm text-slate-700 whitespace-pre-wrap">
                               {initiative.initiative_gartner_value}
