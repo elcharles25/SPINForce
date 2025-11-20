@@ -727,43 +727,71 @@ const fetchOpportunities = async () => {
                                   {getStatusLabel(opportunity.status)}
                                </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col items-center gap-2">  
-                            <div className="w-full px-2">
-                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full transition-all duration-300 ${getProgressBarColor(opportunity.status)}`}
-                                  style={{ width: `${getStatusProgress(opportunity.status)}%` }}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-center mt-1">
-                              {MEETING_TYPE_ORDER.map((type, index) => {
-                                const isCompleted = completedMeetings.includes(type);
-                                const isFirst = index === 0;
-                                const isLast = index === MEETING_TYPE_ORDER.length - 1;
-                                
-                                return (
-                                  <div
-                                    key={type}
-                                    className={`relative text-white text-[8px] font-medium px-1.5 py-0.5 flex items-center justify-center ${
-                                      isCompleted ? 'bg-indigo-300' : 'bg-gray-400'
-                                    } ${isFirst ? '' : '-ml-2'}`}
-                                    style={{
-                                      clipPath: isFirst 
-                                        ? 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)'
-                                        : 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)',
-                                      minWidth: '63px',
-                                      zIndex: MEETING_TYPE_ORDER.length - index
-                                    }}
-                                  >
-                                    <span className="whitespace-nowrap text-[7px]">{type}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </TableCell>
+<TableCell className="p-0">
+  <div className="flex flex-col items-center gap-2 w-full px-2">
+    {/* Contenedor relativo para barra y etiqueta de porcentaje */}
+    <div className="w-full relative">
+      {/* Barra de progreso */}
+      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${getProgressBarColor(opportunity.status)}`}
+          style={{ width: `${getStatusProgress(opportunity.status)}%` }}
+        />
+      </div>
+
+      {/* Etiqueta de porcentaje posicionada sobre el progreso */}
+      {(() => {
+        const progress = Math.round(getStatusProgress(opportunity.status)); // 0–100
+        // Opcional: clampa para evitar que se corte en extremos si quieres
+        const clamped = Math.min(98, Math.max(2, progress)); // deja 2%/98% como margen visual
+        return (
+          <div
+            className="absolute -top-4 /* separada 4px encima de la barra */ 
+                       text-[10px] font-semibold text-slate-600
+                       rounded pointer-events-none select-none"
+            style={{
+              left: `${clamped}%`,
+              transform: 'translateX(-50%)',
+            }}
+            aria-label={`Progreso: ${progress}%`}
+          >
+            {progress}%
+          </div>
+        );
+      })()}
+    </div>
+
+    {/* Flecha segmentada (tu bloque actual ajustado para ocupar todo el ancho) */}
+    <div className="flex w-full mt-1">
+      {MEETING_TYPE_ORDER.map((type, index) => {
+        const isCompleted = completedMeetings.includes(type);
+        const isFirst = index === 0;
+        const isLast = index === MEETING_TYPE_ORDER.length - 1;
+
+        return (
+          <div
+            key={type}
+            className={`relative flex items-center justify-center text-white text-[8px] font-medium
+              ${isCompleted ? 'bg-indigo-300' : 'bg-gray-400'}
+              ${isFirst ? '' : '-ml-2'}
+              ${isFirst ? 'rounded-l' : ''} ${isLast ? 'rounded-r' : ''} flex-1 select-none`}
+            style={{
+              height: '22px',
+              lineHeight: '22px',
+              clipPath: isFirst
+                ? 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)'
+                : 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)',
+              zIndex: MEETING_TYPE_ORDER.length - index,
+            }}
+          >
+            <span className="whitespace-nowrap text-[7px]">{type}</span>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+</TableCell>
+
                         <TableCell>
                           {opportunity.offer_presented ? (
                             <span className="text-green-600">✓ Sí</span>
