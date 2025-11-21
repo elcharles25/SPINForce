@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime } from "@/utils/dateFormatter";
 import { DatePicker } from "@/components/ui/date-picker";
+import { generateFollowUpEmail } from '@/utils/followUpGenerator';
 import "@/app.css";
 import {
   Table,
@@ -292,6 +293,10 @@ export default function OpportunityDetailPage() {
   const [lastQualificationUpdate, setLastQualificationUpdate] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<any>(null);
   const [priorityDetailDialog, setPriorityDetailDialog] = useState(false);
+  const [followUpDialog, setFollowUpDialog] = useState(false);
+  const [createdMeetingNotes, setCreatedMeetingNotes] = useState('');
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+  const [showFollowUpLoader, setShowFollowUpLoader] = useState(false);
 
   const [meetingForm, setMeetingForm] = useState<MeetingForm>({
     contact_id: '',
@@ -556,6 +561,45 @@ const loadData = async () => {
     }
   };
 
+const handleGenerateFollowUp = async () => {
+  if (!createdMeetingNotes || !opportunity) {
+    toast({
+      title: 'Sin información',
+      description: 'No hay notas de reunión disponibles',
+      variant: 'destructive',
+    });
+    return;
+  }
+
+  setFollowUpDialog(false);
+  setFollowUpLoading(true);
+  setShowFollowUpLoader(true);
+  
+  try {
+    await generateFollowUpEmail(
+      createdMeetingNotes,
+      opportunity.contact.first_name,
+      opportunity.contact.email
+    );
+
+    toast({
+      title: 'Email generado',
+      description: 'Se ha abierto Outlook con el email de follow-up',
+    });
+  } catch (error) {
+    console.error('Error generando follow-up:', error);
+    toast({
+      title: 'Error',
+      description: error instanceof Error ? error.message : 'Error al generar follow-up',
+      variant: 'destructive',
+    });
+  } finally {
+    setFollowUpLoading(false);
+    setShowFollowUpLoader(false);
+    setCreatedMeetingNotes('');
+  }
+};
+
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(geminiResult);
@@ -704,35 +748,42 @@ const loadData = async () => {
     setMeetingDialog(true);
   };
 
-  const handleSaveMeeting = async () => {
-    if (!meetingForm.meeting_type || !meetingForm.meeting_date || !meetingForm.contact_id) {
-      alert('Tipo, fecha y contacto son requeridos');
-      return;
-    }
+const handleSaveMeeting = async () => {
+  if (!meetingForm.meeting_type || !meetingForm.meeting_date || !meetingForm.contact_id) {
+    alert('Tipo, fecha y contacto son requeridos');
+    return;
+  }
 
-    try {
-      const meetingData = {
-        opportunity_id: id!,
-        contact_id: meetingForm.contact_id,
-        meeting_type: meetingForm.meeting_type,
-        meeting_date: meetingForm.meeting_date,
-        notes: meetingForm.notes,
-        feeling: meetingForm.feeling,
-      };
+  try {
+    const meetingData = {
+      opportunity_id: id!,
+      contact_id: meetingForm.contact_id,
+      meeting_type: meetingForm.meeting_type,
+      meeting_date: meetingForm.meeting_date,
+      notes: meetingForm.notes,
+      feeling: meetingForm.feeling,
+    };
 
-      if (editingMeeting) {
-        await db.updateMeeting(editingMeeting.id, meetingData);
-      } else {
-        await db.createMeeting(meetingData);
-      }
-
+    if (editingMeeting) {
+      await db.updateMeeting(editingMeeting.id, meetingData);
       await loadData();
       setMeetingDialog(false);
-    } catch (error) {
-      console.error('Error guardando reunión:', error);
-      alert('Error al guardar la reunión');
+    } else {
+      await db.createMeeting(meetingData);
+      await loadData();
+      setMeetingDialog(false);
+      
+      // Preguntar si quiere generar follow-up solo si hay notas
+      if (meetingForm.notes && meetingForm.notes.trim()) {
+        setCreatedMeetingNotes(meetingForm.notes);
+        setFollowUpDialog(true);
+      }
     }
-  };
+  } catch (error) {
+    console.error('Error guardando reunión:', error);
+    alert('Error al guardar la reunión');
+  }
+};
 
   const handleDeleteMeeting = async (meetingId: string) => {
     try {
@@ -1822,7 +1873,6 @@ const loadData = async () => {
               )}
             </div>
           )}
-
           <DialogFooter>
             <Button
               variant="outline"
@@ -1876,6 +1926,45 @@ const loadData = async () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={followUpDialog} onOpenChange={setFollowUpDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Generar email de follow-up?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La reunión se ha creado correctamente. ¿Deseas generar automáticamente un email de follow-up basado en las notas de la reunión?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCreatedMeetingNotes('')}>
+              No, gracias
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleGenerateFollowUp} disabled={followUpLoading}>
+              {followUpLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generando...
+                </>
+              ) : (
+                'Sí, generar email'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {showFollowUpLoader && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-indigo-500" />
+          <p className="text-lg font-semibold text-slate-800">
+            Generando email de follow-up
+          </p>
+          <p className="text-sm text-slate-600">
+            Por favor espera mientras se analiza la reunión...
+          </p>
+        </div>
+      </div>
+)}
     </div>
   );
+  
 }
