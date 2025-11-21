@@ -297,6 +297,7 @@ export default function OpportunityDetailPage() {
   const [createdMeetingNotes, setCreatedMeetingNotes] = useState('');
   const [followUpLoading, setFollowUpLoading] = useState(false);
   const [showFollowUpLoader, setShowFollowUpLoader] = useState(false);
+  const [createdMeetingDate, setCreatedMeetingDate] = useState(''); 
 
   const [meetingForm, setMeetingForm] = useState<MeetingForm>({
     contact_id: '',
@@ -579,7 +580,8 @@ const handleGenerateFollowUp = async () => {
     await generateFollowUpEmail(
       createdMeetingNotes,
       opportunity.contact.first_name,
-      opportunity.contact.email
+      opportunity.contact.email,
+      createdMeetingDate  // ← PASAR LA FECHA GUARDADA
     );
 
     toast({
@@ -597,6 +599,7 @@ const handleGenerateFollowUp = async () => {
     setFollowUpLoading(false);
     setShowFollowUpLoader(false);
     setCreatedMeetingNotes('');
+    setCreatedMeetingDate('');  // ← LIMPIAR LA FECHA TAMBIÉN
   }
 };
 
@@ -776,6 +779,7 @@ const handleSaveMeeting = async () => {
       // Preguntar si quiere generar follow-up solo si hay notas
       if (meetingForm.notes && meetingForm.notes.trim()) {
         setCreatedMeetingNotes(meetingForm.notes);
+        setCreatedMeetingDate(meetingForm.meeting_date);  // ← GUARDAR LA FECHA
         setFollowUpDialog(true);
       }
     }

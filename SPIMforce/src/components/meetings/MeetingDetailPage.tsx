@@ -262,7 +262,8 @@ const handleGenerateFollowUp = async () => {
     await generateFollowUpEmail(
       meeting.notes,
       contact.first_name,
-      contact.email
+      contact.email,
+      meeting.meeting_date  // ← AÑADIR ESTE PARÁMETRO
     );
 
     toast({

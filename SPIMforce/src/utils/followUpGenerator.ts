@@ -101,10 +101,40 @@ ${notesContent}`;
   }
 };
 
+const getMeetingDateText = (meetingDate: string): { dateText: string; verbTense: string } => {
+  // Normalizar la fecha de la reunión a medianoche
+  const meeting = new Date(meetingDate);
+  meeting.setHours(0, 0, 0, 0);
+  
+  // Obtener hoy y ayer a medianoche
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  // Comparar fechas
+  if (meeting.getTime() === today.getTime()) {
+    return { dateText: ' hoy', verbTense: 'hemos revisado' };
+  } else if (meeting.getTime() === yesterday.getTime()) {
+    return { dateText: ' ayer', verbTense: 'revisamos' };
+  } else {
+    // Formatear la fecha como "lunes 18 de noviembre"
+    const options: Intl.DateTimeFormatOptions = { 
+      weekday: 'long', 
+      day: 'numeric', 
+      month: 'long' 
+    };
+    const formattedDate = meeting.toLocaleDateString('es-ES', options);
+    return { dateText: `l ${formattedDate}`, verbTense: 'revisamos' };
+  }
+};
+
 export const generateFollowUpEmail = async (
   notes: string,
   contactFirstName: string,
-  contactEmail: string
+  contactEmail: string,
+  meetingDate: string
 ): Promise<void> => {
   console.log('📊 Analizando notas para follow-up...');
 
@@ -135,11 +165,14 @@ export const generateFollowUpEmail = async (
     signature = signature.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\\//g, '/');
   }
 
+  // Obtener el texto apropiado según la fecha de la reunión
+  const { dateText, verbTense } = getMeetingDateText(meetingDate);
+
   let emailBody = `<body>
     <div>
     <p><span style="font-size:11.0pt;">Hola ${contactFirstName},
-    <br><br>Muchas gracias por tu tiempo en la sesión de ayer.
-    <br><br>Te adjunto el documento que revisamos durante la sesión. Adicionalmente, describo, a alto nivel, mi entendimiento de tus prioridades clave:
+    <br><br>Muchas gracias por tu tiempo en la sesión de${dateText}.
+    <br><br>Te adjunto el documento que ${verbTense} durante la sesión. Adicionalmente, describo, a alto nivel, mi entendimiento de tus prioridades clave:
     <br><br>`;
 
     if (initiatives.length > 0) {

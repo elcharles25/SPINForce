@@ -8,6 +8,7 @@ import { formatDateTime, formatDateES } from "@/utils/dateFormatter";
 import { Sparkles, TrendingUp, ClipboardList, MessageSquare, Copy, Loader2, RefreshCw, Medal, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DatePicker } from "@/components/ui/date-picker";
+import { generateFollowUpEmail } from '@/utils/followUpGenerator';
 import "@/app.css";
 import {
   Table,
@@ -224,6 +225,11 @@ export default function ContactDetailPage() {
   const [notesContent, setNotesContent] = useState('');
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [followUpDialog, setFollowUpDialog] = useState(false);
+  const [createdMeetingNotes, setCreatedMeetingNotes] = useState('');
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+  const [showFollowUpLoader, setShowFollowUpLoader] = useState(false);
+  const [createdMeetingDate, setCreatedMeetingDate] = useState(''); 
 
   const [initiatives, setInitiatives] = useState<Array<{
     title: string;
@@ -964,6 +970,10 @@ const handleCreateMeeting = async (e: React.FormEvent) => {
     await db.createMeeting(payload);
     toast({ title: "Éxito", description: "Reunión creada correctamente" });
     setIsNewMeetingDialogOpen(false);
+    
+    const notesForFollowUp = meetingFormData.notes;
+    const dateForFollowUp = meetingFormData.meeting_date;  // ← GUARDAR LA FECHA
+    
     setMeetingFormData({
       opportunity_id: "none",
       meeting_type: "",
@@ -971,13 +981,62 @@ const handleCreateMeeting = async (e: React.FormEvent) => {
       feeling: "Neutral",
       notes: "",
     });
+    
     loadData();
+    
+    // Preguntar si quiere generar follow-up solo si hay notas
+    if (notesForFollowUp && notesForFollowUp.trim()) {
+      setCreatedMeetingNotes(notesForFollowUp);
+      setCreatedMeetingDate(dateForFollowUp);  // ← GUARDAR LA FECHA
+      setFollowUpDialog(true);
+    }
   } catch (error) {
     toast({
       title: "Error",
       description: `Error al crear la reunión: ${error instanceof Error ? error.message : "Desconocido"}`,
       variant: "destructive",
     });
+  }
+};
+
+const handleGenerateFollowUp = async () => {
+  if (!createdMeetingNotes || !contact) {
+    toast({
+      title: 'Sin información',
+      description: 'No hay notas de reunión disponibles',
+      variant: 'destructive',
+    });
+    return;
+  }
+
+  setFollowUpDialog(false);
+  setFollowUpLoading(true);
+  setShowFollowUpLoader(true);
+  
+  try {
+    await generateFollowUpEmail(
+      createdMeetingNotes,
+      contact.first_name,
+      contact.email,
+      createdMeetingDate  // ← PASAR LA FECHA GUARDADA
+    );
+
+    toast({
+      title: 'Email generado',
+      description: 'Se ha abierto Outlook con el email de follow-up',
+    });
+  } catch (error) {
+    console.error('Error generando follow-up:', error);
+    toast({
+      title: 'Error',
+      description: error instanceof Error ? error.message : 'Error al generar follow-up',
+      variant: 'destructive',
+    });
+  } finally {
+    setFollowUpLoading(false);
+    setShowFollowUpLoader(false);
+    setCreatedMeetingNotes('');
+    setCreatedMeetingDate('');  // ← LIMPIAR LA FECHA TAMBIÉN
   }
 };
 
@@ -2451,6 +2510,45 @@ ${idx + 1}. ${opp.opportunity}
       </DialogFooter>
     </DialogContent>
   </Dialog>
+  <AlertDialog open={followUpDialog} onOpenChange={setFollowUpDialog}>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>¿Generar email de follow-up?</AlertDialogTitle>
+      <AlertDialogDescription>
+        La reunión se ha creado correctamente. ¿Deseas generar automáticamente un email de follow-up basado en las notas de la reunión?
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel onClick={() => setCreatedMeetingNotes('')}>
+        No, gracias
+      </AlertDialogCancel>
+      <AlertDialogAction onClick={handleGenerateFollowUp} disabled={followUpLoading}>
+        {followUpLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Generando...
+          </>
+        ) : (
+          'Sí, generar email'
+        )}
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+
+{showFollowUpLoader && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center gap-4">
+      <Loader2 className="h-12 w-12 animate-spin text-indigo-500" />
+      <p className="text-lg font-semibold text-slate-800">
+        Generando email de follow-up
+      </p>
+      <p className="text-sm text-slate-600">
+        Por favor espera mientras se analiza la reunión...
+      </p>
+    </div>
+  </div>
+)}
     </div>
   );
 }
