@@ -361,7 +361,9 @@ const Dashboard = () => {
 
             const lastMeetingDate = parseFlexibleDate(sortedMeetings[0].meeting_date);
             
-            if (lastMeetingDate < oneMonthAgo) {
+            if (lastMeetingDate < oneMonthAgo && 
+                opp.status !== 'Cerrada ganada' && 
+                opp.status !== 'Cerrada perdida') {
               staleOpportunitiesList.push({
                 id: opp.id,
                 organization: opp.contact.organization,
@@ -690,7 +692,7 @@ const Dashboard = () => {
                   {metrics.opportunities.withOffer} con oferta
                 </Badge>
                 <Badge variant="outline" className="text-xs bg-amber-50 border-amber-200 text-amber-900">
-                  {metrics.opportunities.staleOpportunities.length} sin actividad
+                  {metrics.opportunities.staleOpportunities.length} con baja actividad
                 </Badge>
               </div>
             </CardContent>
@@ -1036,7 +1038,7 @@ const Dashboard = () => {
                           <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
                           <div>
                             <p className="text-sm font-semibold text-amber-900">
-                              {metrics.opportunities.staleOpportunities.length} oportunidad{metrics.opportunities.staleOpportunities.length !== 1 ? 'es' : ''} sin actividad
+                              {metrics.opportunities.staleOpportunities.length} oportunidad{metrics.opportunities.staleOpportunities.length !== 1 ? 'es' : ''} con baja actividad
                             </p>
                             <p className="text-xs text-amber-700 mt-1 italic">
                                 Oportunidades sin reuniones en más de 1 mes

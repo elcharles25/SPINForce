@@ -154,6 +154,7 @@ export default function OpportunitiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [staleOpportunityIds, setStaleOpportunityIds] = useState<Set<string>>(new Set());
   const filterType = searchParams.get('filter');
+  const [showClosedOpportunities, setShowClosedOpportunities] = useState(false);
 
   useEffect(() => {
     initData();
@@ -246,7 +247,9 @@ const fetchOpportunities = async () => {
             const lastMeetingDate = parseFlexibleDate(lastMeetingDateStr);
             lastMeetingDate.setHours(0, 0, 0, 0);
             
-            if (lastMeetingDate.getTime() < oneMonthAgo.getTime()) {
+            if (lastMeetingDate.getTime() < oneMonthAgo.getTime() && 
+                opp.status !== 'Cerrada ganada' && 
+                opp.status !== 'Cerrada perdida') {
               staleIds.add(opp.id);
             }
           }
@@ -471,6 +474,14 @@ const fetchOpportunities = async () => {
     return aStatus.localeCompare(bStatus, 'es', { sensitivity: 'base' });
   };
 
+  const activeOpportunities = opportunities.filter(
+  opp => opp.status !== 'Cerrada ganada' && opp.status !== 'Cerrada perdida'
+  );
+
+  const closedOpportunities = opportunities.filter(
+    opp => opp.status === 'Cerrada ganada' || opp.status === 'Cerrada perdida'
+  );
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
@@ -480,7 +491,7 @@ const fetchOpportunities = async () => {
           {filterType === 'stale' && staleOpportunityIds.size > 0 && (
             <div className="flex items-center gap-2 mt-2">
               <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-900">
-                Mostrando {staleOpportunityIds.size} oportunidad{staleOpportunityIds.size !== 1 ? 'es' : ''} sin actividad (mayor de 1 mes)
+                Mostrando {staleOpportunityIds.size} oportunidad{staleOpportunityIds.size !== 1 ? 'es' : ''} con baja actividad (mayor de 1 mes)
               </Badge>
               <button
                 onClick={() => setSearchParams({})}
@@ -691,107 +702,96 @@ const fetchOpportunities = async () => {
               </TableRow>
             </TableHeader>
               <TableBody>
-              {opportunities.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
-                            No hay oportunidades registradas
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        [...opportunities]
-                          .filter((opp) => {
-                            if (filterType === 'stale') {
-                              return staleOpportunityIds.has(opp.id);
-                            }
-                            return true;
-                          })
-                          .sort(compareByCustomStatus)
-                          .map((opportunity) => {
-                            const completedMeetings = meetingTypes[opportunity.id] || [];
-                            
-                            return (
-                            <TableRow
-                              key={opportunity.id}
-                              className="cursor-pointer hover:bg-muted/50 text-sm text-center align-middle"
-                              onClick={() => navigate(`/opportunities/${opportunity.id}`)}
-                            >
+              {activeOpportunities.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
+                    No hay oportunidades activas
+                  </TableCell>
+                </TableRow>
+              ) : (
+                [...activeOpportunities]
+                  .filter((opp) => {
+                    if (filterType === 'stale') {
+                      return staleOpportunityIds.has(opp.id);
+                    }
+                    return true;
+                  })
+                  .sort(compareByCustomStatus)
+                  .map((opportunity) => {
+                    const completedMeetings = meetingTypes[opportunity.id] || [];
+                    
+                    return (
+                      <TableRow
+                        key={opportunity.id}
+                        className="cursor-pointer hover:bg-muted/50 text-sm text-center align-middle"
+                        onClick={() => navigate(`/opportunities/${opportunity.id}`)}
+                      >
                         <TableCell>{opportunity?.contact?.organization ?? '—'}</TableCell>
                         <TableCell className="font-bold">
                           {opportunity?.contact?.first_name} {opportunity?.contact?.last_name}
                         </TableCell>
                         <TableCell>{opportunity?.contact?.title}</TableCell>
                         <TableCell>
-                                <Badge 
-                                  variant="outline"
-                                  className={STATUS_COLORS[opportunity.status] || 'bg-gray-500'}>
-                                  {getStatusLabel(opportunity.status)}
-                               </Badge>
+                          <Badge 
+                            variant="outline"
+                            className={STATUS_COLORS[opportunity.status] || 'bg-gray-500'}>
+                            {getStatusLabel(opportunity.status)}
+                          </Badge>
                         </TableCell>
-<TableCell className="p-0">
-  <div className="flex flex-col items-center gap-2 w-full px-2">
-    {/* Contenedor relativo para barra y etiqueta de porcentaje */}
-    <div className="w-full relative">
-      {/* Barra de progreso */}
-      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-300 ${getProgressBarColor(opportunity.status)}`}
-          style={{ width: `${getStatusProgress(opportunity.status)}%` }}
-        />
-      </div>
-
-      {/* Etiqueta de porcentaje posicionada sobre el progreso */}
-      {(() => {
-        const progress = Math.round(getStatusProgress(opportunity.status)); // 0–100
-        // Opcional: clampa para evitar que se corte en extremos si quieres
-        const clamped = Math.min(98, Math.max(2, progress)); // deja 2%/98% como margen visual
-        return (
-          <div
-            className="absolute -top-4 /* separada 4px encima de la barra */ 
-                       text-[10px] font-semibold text-slate-600
-                       rounded pointer-events-none select-none"
-            style={{
-              left: `${clamped}%`,
-              transform: 'translateX(-50%)',
-            }}
-            aria-label={`Progreso: ${progress}%`}
-          >
-            {progress}%
-          </div>
-        );
-      })()}
-    </div>
-
-    {/* Flecha segmentada (tu bloque actual ajustado para ocupar todo el ancho) */}
-    <div className="flex w-full mt-1">
-      {MEETING_TYPE_ORDER.map((type, index) => {
-        const isCompleted = completedMeetings.includes(type);
-        const isFirst = index === 0;
-        const isLast = index === MEETING_TYPE_ORDER.length - 1;
-
-        return (
-          <div
-            key={type}
-            className={`relative flex items-center justify-center text-white text-[8px] font-medium
-              ${isCompleted ? 'bg-indigo-300' : 'bg-gray-400'}
-              ${isFirst ? '' : '-ml-2'}
-              ${isFirst ? 'rounded-l' : ''} ${isLast ? 'rounded-r' : ''} flex-1 select-none`}
-            style={{
-              height: '22px',
-              lineHeight: '22px',
-              clipPath: isFirst
-                ? 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)'
-                : 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)',
-              zIndex: MEETING_TYPE_ORDER.length - index,
-            }}
-          >
-            <span className="whitespace-nowrap text-[7px]">{type}</span>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-</TableCell>
-
+                        <TableCell className="p-0">
+                          <div className="flex flex-col items-center gap-2 w-full px-2">
+                            <div className="w-full relative">
+                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${getProgressBarColor(opportunity.status)}`}
+                                  style={{ width: `${getStatusProgress(opportunity.status)}%` }}
+                                />
+                              </div>
+                              {(() => {
+                                const progress = Math.round(getStatusProgress(opportunity.status));
+                                const clamped = Math.min(98, Math.max(2, progress));
+                                return (
+                                  <div
+                                    className="absolute -top-4 text-[10px] font-semibold text-slate-600 rounded pointer-events-none select-none"
+                                    style={{
+                                      left: `${clamped}%`,
+                                      transform: 'translateX(-50%)',
+                                    }}
+                                    aria-label={`Progreso: ${progress}%`}
+                                  >
+                                    {progress}%
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                            <div className="flex w-full mt-1">
+                              {MEETING_TYPE_ORDER.map((type, index) => {
+                                const isCompleted = completedMeetings.includes(type);
+                                const isFirst = index === 0;
+                                const isLast = index === MEETING_TYPE_ORDER.length - 1;
+                                return (
+                                  <div
+                                    key={type}
+                                    className={`relative flex items-center justify-center text-white text-[8px] font-medium
+                                      ${isCompleted ? 'bg-indigo-300' : 'bg-gray-400'}
+                                      ${isFirst ? '' : '-ml-2'}
+                                      ${isFirst ? 'rounded-l' : ''} ${isLast ? 'rounded-r' : ''} flex-1 select-none`}
+                                    style={{
+                                      height: '22px',
+                                      lineHeight: '22px',
+                                      clipPath: isFirst
+                                        ? 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)'
+                                        : 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)',
+                                      zIndex: MEETING_TYPE_ORDER.length - index,
+                                    }}
+                                  >
+                                    <span className="whitespace-nowrap text-[7px]">{type}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           {opportunity.offer_presented ? (
                             <span className="text-green-600">✓ Sí</span>
@@ -805,21 +805,163 @@ const fetchOpportunities = async () => {
                               {meetingCounts[opportunity.id] || 0}
                             </Badge>
                             {lastMeetingDates[opportunity.id] && (
-                              <span className="text-xs text-muted-foreground">
+                              <span
+                                className={`text-xs text-muted-foreground rounded px-1 ${
+                                  staleOpportunityIds.has(opportunity.id) ? 'bg-amber-200 font-medium' : ''
+                                }`}
+                              >
                                 Última reunión: {formatDateTime(lastMeetingDates[opportunity.id])}
                               </span>
                             )}
                           </div>
                         </TableCell>
                       </TableRow>
-                            );
-                          })
-                )}
-              </TableBody>
+                    );
+                  })
+              )}
+            </TableBody>
 
           </Table>
+          </div>
+
+        {closedOpportunities.length > 0 && filterType !== 'stale' && (
+          <div className="mt-4">
+            <button
+              onClick={() => setShowClosedOpportunities(!showClosedOpportunities)}
+              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors underline"
+            >
+              {showClosedOpportunities 
+                ? `Ocultar oportunidades cerradas (${closedOpportunities.length})`
+                : `Ver oportunidades cerradas (${closedOpportunities.length})`
+              }
+            </button>
+
+            {showClosedOpportunities && (
+              <div className="mt-4 bg-card rounded-lg shadow overflow-hidden overflow-x-auto opacity-75">
+                <Table className="w-full table-fixed">
+                  <colgroup>
+                    <col className="w-[100px]" />
+                    <col className="w-[100px]" />
+                    <col className="w-[120px]" />
+                    <col className="w-[100px]" />
+                    <col className="w-[300px]" />
+                    <col className="w-[60px]" />
+                    <col className="w-[150px]" />
+                  </colgroup>
+                  <TableHeader>
+                    <TableRow className="bg-muted hover:bg-muted/50">
+                      <TableHead className="text-center">Organización</TableHead>
+                      <TableHead className="text-center">Contacto</TableHead>
+                      <TableHead className="text-center">Cargo</TableHead>
+                      <TableHead className="text-center">Estado</TableHead>
+                      <TableHead className="text-center">Progreso</TableHead>
+                      <TableHead className="text-center">Oferta</TableHead>
+                      <TableHead className="text-center">Reuniones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {closedOpportunities.sort(compareByCustomStatus).map((opportunity) => {
+                      const completedMeetings = meetingTypes[opportunity.id] || [];
+                      return (
+                        <TableRow
+                          key={opportunity.id}
+                          className="cursor-pointer hover:bg-muted/50 text-sm text-center align-middle"
+                          onClick={() => navigate(`/opportunities/${opportunity.id}`)}
+                        >
+                          <TableCell>{opportunity?.contact?.organization ?? '—'}</TableCell>
+                          <TableCell className="font-bold">
+                            {opportunity?.contact?.first_name} {opportunity?.contact?.last_name}
+                          </TableCell>
+                          <TableCell>{opportunity?.contact?.title}</TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant="outline"
+                              className={STATUS_COLORS[opportunity.status] || 'bg-gray-500'}>
+                              {getStatusLabel(opportunity.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="p-0">
+                            <div className="flex flex-col items-center gap-2 w-full px-2">
+                              <div className="w-full relative">
+                                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-300 ${getProgressBarColor(opportunity.status)}`}
+                                    style={{ width: `${getStatusProgress(opportunity.status)}%` }}
+                                  />
+                                </div>
+                                {(() => {
+                                  const progress = Math.round(getStatusProgress(opportunity.status));
+                                  const clamped = Math.min(98, Math.max(2, progress));
+                                  return (
+                                    <div
+                                      className="absolute -top-4 text-[10px] font-semibold text-slate-600 rounded pointer-events-none select-none"
+                                      style={{
+                                        left: `${clamped}%`,
+                                        transform: 'translateX(-50%)',
+                                      }}
+                                    >
+                                      {progress}%
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                              <div className="flex w-full mt-1">
+                                {MEETING_TYPE_ORDER.map((type, index) => {
+                                  const isCompleted = completedMeetings.includes(type);
+                                  const isFirst = index === 0;
+                                  const isLast = index === MEETING_TYPE_ORDER.length - 1;
+                                  return (
+                                    <div
+                                      key={type}
+                                      className={`relative flex items-center justify-center text-white text-[8px] font-medium
+                                        ${isCompleted ? 'bg-indigo-300' : 'bg-gray-400'}
+                                        ${isFirst ? '' : '-ml-2'}
+                                        ${isFirst ? 'rounded-l' : ''} ${isLast ? 'rounded-r' : ''} flex-1 select-none`}
+                                      style={{
+                                        height: '22px',
+                                        lineHeight: '22px',
+                                        clipPath: isFirst
+                                          ? 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)'
+                                          : 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)',
+                                        zIndex: MEETING_TYPE_ORDER.length - index,
+                                      }}
+                                    >
+                                      <span className="whitespace-nowrap text-[7px]">{type}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {opportunity.offer_presented ? (
+                              <span className="text-green-600">✓ Sí</span>
+                            ) : (
+                              <span className="text-muted-foreground">No</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge variant="secondary">
+                                {meetingCounts[opportunity.id] || 0}
+                              </Badge>
+                              {lastMeetingDates[opportunity.id] && (
+                                <span className="text-xs text-muted-foreground rounded px-1">
+                                  Última reunión: {formatDateTime(lastMeetingDates[opportunity.id])}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        )}
         </div>
       </div>
-    </div>
-  );
+   );
 }
