@@ -658,7 +658,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
             <User className="h-5 w-5 text-indigo-600" />
-            Contactos Asociados ({contacts.length})
+            Contactos asociados ({contacts.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
