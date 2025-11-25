@@ -2334,7 +2334,7 @@ app.post('/api/contacts/import-received-emails', async (req, res) => {
           opportunity_id: 'Sin oportunidad',
           meeting_type: 'Email',
           meeting_date: meetingDate,
-          feeling: 'N/A',
+          feeling: '',
           notes: `[${reply.type}] Asunto: ${reply.subject}\n\nDe: ${reply.senderName} <${reply.senderEmail}>\n\n${cleanedBody}`
         };
 
