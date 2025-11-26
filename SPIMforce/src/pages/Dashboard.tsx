@@ -31,6 +31,9 @@ interface DashboardMetrics {
     withPA: number;
     webinarsSubscribed: number;
   };
+  accounts: {
+    total: number;
+  };
   campaigns: {
     total: number;
     active: number;
@@ -197,7 +200,8 @@ const Dashboard = () => {
 
   const loadDashboardMetrics = async () => {
     try {
-      const [contacts, campaigns, opportunities, distributions, templates] = await Promise.all([
+      const [accounts, contacts, campaigns, opportunities, distributions, templates] = await Promise.all([
+        db.getAccounts(),
         db.getContacts(),
         db.getCampaigns(),
         db.getOpportunities(),
@@ -507,6 +511,9 @@ const Dashboard = () => {
           withPA: withPACount,
           webinarsSubscribed: webinarsSubscribedCount,
         },
+        accounts: {
+          total: accounts.length,
+        },
         campaigns: {
           total: campaigns.length,
           active: activeCount,
@@ -583,7 +590,44 @@ const Dashboard = () => {
     );
   }
 
-  if (metrics.contacts.total === 0) {
+if (metrics.contacts.total === 0 && metrics.accounts.total === 0) {
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Dashboard Comercial</h1>
+              <p className="text-muted-foreground mt-1">Resumen general de actividad y rendimiento</p>
+            </div>
+          </div>
+
+          <Card className="border-2 border-dashed border-indigo-200">
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <div className="rounded-full bg-indigo-50 p-6 mb-6">
+                <Users className="h-16 w-16 text-indigo-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-foreground mb-2">
+                Todavía no has creado ninguna cuenta ni nungún contacto
+              </h3>
+              <p className="text-muted-foreground text-center mb-6 max-w-xl">
+                Crea primero una cuenta y después un contacto para empezar a ver información en el dashboard y comenzar a gestionar tus campañas y oportunidades
+              </p>
+              <div className="flex gap-4">
+                  <button
+                    onClick={() => navigate('/accounts')}
+                    className="flex px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                  >
+                    Ir a Cuentas
+                  </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (metrics.contacts.total === 0 && metrics.accounts.total > 0) {
     return (
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-7xl mx-auto">
@@ -603,14 +647,8 @@ const Dashboard = () => {
                 Todavía no has creado ningún contacto
               </h3>
               <p className="text-muted-foreground text-center mb-6 max-w-xl">
-                Crea una cuenta y un contacto para empezar a ver información en el dashboard y comenzar a gestionar tus campañas y oportunidades
-              </p>
-              <button
-                onClick={() => navigate('/accounts')}
-                className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-              >
-                Ir a Cuentas
-              </button>
+                Crea un contacto para empezar a ver información en el dashboard y comenzar a gestionar tus campañas y oportunidades
+              </p>  
               <button
                 onClick={() => navigate('/crm')}
                 className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
