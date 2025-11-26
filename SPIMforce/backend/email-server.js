@@ -34,12 +34,19 @@
   app.use(express.urlencoded({ limit: '50mb' }));
 
   const createOutlookDraft = async (to, subject, body, attachments = [], replyToEmail = null) => {
-      console.log('🔍 DEBUG replyToEmail:');
-      console.log('   - Existe?:', !!replyToEmail);
-      console.log('   - Tipo:', typeof replyToEmail);
-      console.log('   - Contenido:', JSON.stringify(replyToEmail, null, 2));
+    console.log('🔍 DEBUG replyToEmail:');
+    console.log('   - Existe?:', !!replyToEmail);
+    console.log('   - Tipo:', typeof replyToEmail);
+    console.log('   - Contenido:', JSON.stringify(replyToEmail, null, 2));
+    
+    const tempFiles = {
+      scriptPath: null,
+      bodyFilePath: null,
+      subjectFilePath: null,
+      attachmentPaths: []
+    };
+
     try {
-      // DEBUG: Ver qué llega en replyToEmail
       if (replyToEmail) {
         console.log('   - Tiene EntryID?:', !!replyToEmail.EntryID);
         console.log('   - EntryID value:', replyToEmail.EntryID);
@@ -48,8 +55,6 @@
       const tempDir = path.join(__dirname, 'temp');
       
       await fs_promises.mkdir(tempDir, { recursive: true }).catch(() => {});
-
-      const attachmentPaths = [];
 
       console.log(`📎 Procesando ${attachments.length} adjuntos...`);
       console.log(`📎 Attachments recibidos:`, JSON.stringify(attachments.map(a => ({
@@ -65,7 +70,6 @@
           let buffer;
           let filename;
 
-          // Si el adjunto es una URL
           if (attachment.url) {
             filename = attachment.name || 'attachment';
             console.log(`📥 Descargando desde URL: ${filename}`);
@@ -74,7 +78,6 @@
             buffer = Buffer.from(response.data);
             console.log(`✅ URL descargada: ${filename}, tamaño: ${buffer.length}`);
           } 
-          // Si es un archivo en base64
           else if (attachment.content) {
             filename = attachment.filename || attachment.name || 'attachment';
             console.log(`📥 Procesando base64: ${filename}`);
@@ -90,7 +93,7 @@
 
           const tempFilePath = path.join(tempDir, filename);
           await fs.writeFile(tempFilePath, buffer);
-          attachmentPaths.push(tempFilePath);
+          tempFiles.attachmentPaths.push(tempFilePath);
           console.log(`💾 Adjunto guardado en: ${tempFilePath}`);
         } catch (error) {
           console.error(`❌ Error procesando adjunto:`, error.message);
@@ -98,22 +101,22 @@
         }
       }
 
-      console.log(`📎 Total de adjuntos guardados: ${attachmentPaths.length}`);
-      console.log(`📎 Rutas de archivos:`, attachmentPaths);
+      console.log(`📎 Total de adjuntos guardados: ${tempFiles.attachmentPaths.length}`);
+      console.log(`📎 Rutas de archivos:`, tempFiles.attachmentPaths);
 
-      const bodyFilePath = path.join(tempDir, `body_${uuidv4()}.html`);
-      await fs.writeFile(bodyFilePath, body, 'utf8');
+      tempFiles.bodyFilePath = path.join(tempDir, `body_${uuidv4()}.html`);
+      await fs.writeFile(tempFiles.bodyFilePath, body, 'utf8');
       
-      const subjectFilePath = path.join(tempDir, `subject_${uuidv4()}.txt`);
-      await fs.writeFile(subjectFilePath, subject, 'utf8');
+      tempFiles.subjectFilePath = path.join(tempDir, `subject_${uuidv4()}.txt`);
+      await fs.writeFile(tempFiles.subjectFilePath, subject, 'utf8');
       
       const escapedTo = to.replace(/'/g, "''");
-      const escapedBodyPath = bodyFilePath.replace(/\\/g, '\\\\');
-      const escapedSubjectPath = subjectFilePath.replace(/\\/g, '\\\\');
+      const escapedBodyPath = tempFiles.bodyFilePath.replace(/\\/g, '\\\\');
+      const escapedSubjectPath = tempFiles.subjectFilePath.replace(/\\/g, '\\\\');
 
       let attachmentLines = '';
-      if (attachmentPaths.length > 0) {
-        attachmentLines = attachmentPaths
+      if (tempFiles.attachmentPaths.length > 0) {
+        attachmentLines = tempFiles.attachmentPaths
           .map(filePath => {
             const escaped = filePath.replace(/\\/g, '\\\\');
             console.log(`📎 Añadiendo a PowerShell: ${escaped}`);
@@ -124,135 +127,120 @@
 
       console.log(`📜 Script PowerShell con adjuntos:\n${attachmentLines}`);
 
-          // Si hay un email anterior, preparar los datos para responder
-   let replySetup = '';
-console.log('🔍 Evaluando condición para reply:');
-console.log('   replyToEmail existe:', !!replyToEmail);
-console.log('   replyToEmail.EntryID existe:', replyToEmail ? !!replyToEmail.EntryID : 'N/A');
+      let replySetup = '';
+      console.log('🔍 Evaluando condición para reply:');
+      console.log('   replyToEmail existe:', !!replyToEmail);
+      console.log('   replyToEmail.EntryID existe:', replyToEmail ? !!replyToEmail.EntryID : 'N/A');
 
-if (replyToEmail && replyToEmail.EntryID) {
-  const escapedEntryID = replyToEmail.EntryID.replace(/\\/g, '\\\\').replace(/'/g, "''");
-  
-  console.log('📧 Configurando respuesta sobre email anterior:');
-  console.log('   EntryID:', escapedEntryID.substring(0, 50) + '...');
-  
-  replySetup = `
-Write-Host "=== INTENTANDO CREAR RESPUESTA ==="
-Write-Host "EntryID del email anterior: ${escapedEntryID.substring(0, 30)}..."
+      if (replyToEmail && replyToEmail.EntryID) {
+        const escapedEntryID = replyToEmail.EntryID.replace(/\\/g, '\\\\').replace(/'/g, "''");
+        
+        console.log('📧 Configurando respuesta sobre email anterior:');
+        console.log('   EntryID:', escapedEntryID.substring(0, 50) + '...');
+        
+        replySetup = `
+  Write-Host "=== INTENTANDO CREAR RESPUESTA ==="
+  Write-Host "EntryID del email anterior: ${escapedEntryID.substring(0, 30)}..."
 
-try {
-  $namespace = $outlook.GetNamespace("MAPI")
-  $sentItems = $namespace.GetDefaultFolder(5)
-  
-  Write-Host "Buscando email original en Enviados..."
-  
-  $originalEmail = $null
   try {
-    $originalEmail = $namespace.GetItemFromID('${escapedEntryID}')
-    Write-Host "Email encontrado por GetItemFromID"
+    $namespace = $outlook.GetNamespace("MAPI")
+    $sentItems = $namespace.GetDefaultFolder(5)
+    
+    Write-Host "Buscando email original en Enviados..."
+    
+    $originalEmail = $null
+    try {
+      $originalEmail = $namespace.GetItemFromID('${escapedEntryID}')
+      Write-Host "Email encontrado por GetItemFromID"
+    } catch {
+      Write-Host "GetItemFromID falló: $($_.Exception.Message)"
+    }
+    
+    if ($originalEmail) {
+      Write-Host "EXITO: Email original encontrado"
+      Write-Host "Asunto original: $($originalEmail.Subject)"
+      Write-Host "Creando Reply..."
+      
+      $draft = $originalEmail.Reply()
+      $draft.To = '${escapedTo}'
+      
+      Write-Host "Reply creado correctamente"
+    } else {
+      Write-Host "ADVERTENCIA: Email original no encontrado, creando email nuevo"
+      $draft = $outlook.CreateItem(0)
+      $draft.To = '${escapedTo}'
+      $draft.Subject = [System.IO.File]::ReadAllText('${escapedSubjectPath}', [System.Text.Encoding]::UTF8)
+    }
   } catch {
-    Write-Host "GetItemFromID falló: $($_.Exception.Message)"
-  }
-  
-  if ($originalEmail) {
-    Write-Host "EXITO: Email original encontrado"
-    Write-Host "Asunto original: $($originalEmail.Subject)"
-    Write-Host "Creando Reply..."
-    
-    $draft = $originalEmail.Reply()
-    $draft.To = '${escapedTo}'
-    
-    Write-Host "Reply creado correctamente"
-  } else {
-    Write-Host "ADVERTENCIA: Email original no encontrado, creando email nuevo"
+    Write-Host "ERROR en proceso de reply: $($_.Exception.Message)"
+    Write-Host "Creando email nuevo como fallback"
     $draft = $outlook.CreateItem(0)
     $draft.To = '${escapedTo}'
     $draft.Subject = [System.IO.File]::ReadAllText('${escapedSubjectPath}', [System.Text.Encoding]::UTF8)
-  }
-} catch {
-  Write-Host "ERROR en proceso de reply: $($_.Exception.Message)"
-  Write-Host "Creando email nuevo como fallback"
+  }`;
+      } else {
+        console.log('📧 Creando email nuevo (sin email anterior)');
+        replySetup = `Write-Host "Creando email nuevo"
   $draft = $outlook.CreateItem(0)
   $draft.To = '${escapedTo}'
   $draft.Subject = [System.IO.File]::ReadAllText('${escapedSubjectPath}', [System.Text.Encoding]::UTF8)
-}`;
-} else {
-  console.log('📧 Creando email nuevo (sin email anterior)');
-  replySetup = `Write-Host "Creando email nuevo"
-$draft = $outlook.CreateItem(0)
-$draft.To = '${escapedTo}'
-$draft.Subject = [System.IO.File]::ReadAllText('${escapedSubjectPath}', [System.Text.Encoding]::UTF8)
-`;
-}
+  `;
+      }
 
-const psScript = `$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName Microsoft.Office.Interop.Outlook
+      const psScript = `$ErrorActionPreference = 'Stop'
+  Add-Type -AssemblyName Microsoft.Office.Interop.Outlook
 
-try {
-  Write-Host "Iniciando creación de borrador..."
-  
   try {
-    $outlook = [System.Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application")
-    Write-Host "Outlook conectado"
+    Write-Host "Iniciando creación de borrador..."
+    
+    try {
+      $outlook = [System.Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application")
+      Write-Host "Outlook conectado"
+    } catch {
+      $outlook = New-Object -ComObject Outlook.Application
+      Write-Host "Outlook iniciado"
+    }
+
+    ${replySetup}
+
+    Write-Host "Configurando cuerpo del email..."
+
+    $newBody = [System.IO.File]::ReadAllText('${escapedBodyPath}', [System.Text.Encoding]::UTF8)
+
+    if ($draft.HTMLBody -and $draft.HTMLBody.Length -gt 100) {
+      Write-Host "Reply detectado - Concatenando nuevo contenido con historial"
+      $draft.HTMLBody = $newBody + $draft.HTMLBody
+      Write-Host "Historial concatenado correctamente"
+    } else {
+      Write-Host "Email nuevo - Estableciendo contenido"
+      $draft.HTMLBody = $newBody
+    }
+    
+    ${attachmentLines}
+    
+    Write-Host "Mostrando email..."
+    $draft.Display()
+    
+    Write-Host "Success"
+    
   } catch {
-    $outlook = New-Object -ComObject Outlook.Application
-    Write-Host "Outlook iniciado"
-  }
+    Write-Host "ERROR CRITICO: $($_.Exception.Message)"
+    Write-Host "StackTrace: $($_.Exception.StackTrace)"
+    exit 1
+  }`;
 
-  ${replySetup}
-
-  Write-Host "Configurando cuerpo del email..."
-
-  # Obtener el nuevo contenido
-  $newBody = [System.IO.File]::ReadAllText('${escapedBodyPath}', [System.Text.Encoding]::UTF8)
-
-  # Si el draft ya tiene contenido (es un Reply), concatenar
-  if ($draft.HTMLBody -and $draft.HTMLBody.Length -gt 100) {
-    Write-Host "Reply detectado - Concatenando nuevo contenido con historial"
-    
-    # Combinar: nuevo contenido + separador + historial anterior
-    $draft.HTMLBody = $newBody + $draft.HTMLBody
-    
-    Write-Host "Historial concatenado correctamente"
-  } else {
-    Write-Host "Email nuevo - Estableciendo contenido"
-    $draft.HTMLBody = $newBody
-  }
-  
-  # Agregar adjuntos si hay
-  ${attachmentLines}
-  
-  Write-Host "Mostrando email..."
-  $draft.Display()
-  
-  Write-Host "Success"
-  
-} catch {
-  Write-Host "ERROR CRITICO: $($_.Exception.Message)"
-  Write-Host "StackTrace: $($_.Exception.StackTrace)"
-  exit 1
-}`;
-
-      const scriptPath = path.join(__dirname, `temp_${uuidv4()}.ps1`);
-      await fs.writeFile(scriptPath, psScript, 'utf8');
+      tempFiles.scriptPath = path.join(__dirname, `temp_${uuidv4()}.ps1`);
+      await fs.writeFile(tempFiles.scriptPath, psScript, 'utf8');
 
       console.log('🔧 Ejecutando PowerShell...');
 
       const { stdout, stderr } = await execPromise(
-        `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
+        `powershell -NoProfile -ExecutionPolicy Bypass -File "${tempFiles.scriptPath}"`,
         { encoding: 'utf8', timeout: 1500000 }
       );
 
       console.log(`✅ PowerShell stdout: ${stdout}`);
       if (stderr) console.log(`⚠️ PowerShell stderr: ${stderr}`);
-
-      // Limpieza
-      await fs.unlink(scriptPath).catch(() => {});
-      await fs.unlink(bodyFilePath).catch(() => {});
-      await fs.unlink(subjectFilePath).catch(() => {});
-      for (const filePath of attachmentPaths) {
-        await fs.unlink(filePath).catch(() => {});
-      }
 
       if (stdout.includes('Success')) {
         console.log(`✅ Borrador creado para: ${to}`);
@@ -265,6 +253,24 @@ try {
       console.error(`❌ Error para ${to}:`, error.message);
       console.error(`❌ Stack completo:`, error.stack);
       throw error;
+    } finally {
+      // 🧹 LIMPIEZA GARANTIZADA - Se ejecuta SIEMPRE (éxito o error)
+      console.log('🧹 Limpiando archivos temporales...');
+      
+      if (tempFiles.scriptPath) {
+        await fs.unlink(tempFiles.scriptPath).catch(() => {});
+      }
+      if (tempFiles.bodyFilePath) {
+        await fs.unlink(tempFiles.bodyFilePath).catch(() => {});
+      }
+      if (tempFiles.subjectFilePath) {
+        await fs.unlink(tempFiles.subjectFilePath).catch(() => {});
+      }
+      for (const filePath of tempFiles.attachmentPaths) {
+        await fs.unlink(filePath).catch(() => {});
+      }
+      
+      console.log('✅ Archivos temporales eliminados');
     }
   };
 
