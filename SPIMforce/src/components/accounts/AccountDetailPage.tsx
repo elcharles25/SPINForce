@@ -465,16 +465,14 @@ const handleSubmit = async (e: React.FormEvent) => {
       {/* HEADER CON LOGO Y DATOS DE LA CUENTA */}
       <div className="flex gap-6 mb-6">
         {/* LOGO DE LA CUENTA */}
-        <div className="h-32 w-32 overflow-hidden">
-          <Card className="shadow-sm rounded-2xl h-full">
-            <CardContent className="p-0 h-full">
+        <div className="h-32 aspect-[2/1] overflow-hidden">
               <div
                 ref={logoDropZoneRef}
                 tabIndex={0}
                 className={
                   `relative w-full h-full overflow-hidden 
                   ${account.logo 
-                      ? 'rounded-2xl'
+                      ? ''
                       : `rounded-2xl border-2 border-dashed 
                         ${isDraggingLogo ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 bg-gray-50'}
                         transition-colors cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500`
@@ -489,7 +487,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                     <img
                       src={`http://localhost:3001${account.logo}?t=${Date.now()}`}
                       alt={account.name}
-                      className="absolute inset-0 w-full h-full object-contain p-2"
+                      className="absolute inset-0 w-full h-full object-contain p-1"
                       key={account.logo}
                     />
                     <button
@@ -514,13 +512,11 @@ const handleSubmit = async (e: React.FormEvent) => {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
         </div>
 
         {/* INFORMACIÓN PRINCIPAL DE LA CUENTA */}
         <div className="flex-1">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start mb-3">
             <div>
               <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
                 {account.name}
@@ -528,6 +524,11 @@ const handleSubmit = async (e: React.FormEvent) => {
               {account.full_name && (
                 <p className="text-xl text-slate-600 mt-1">{account.full_name}</p>
               )}
+              {account.sector && (
+              <div className="text-sm flex text-slate-500 items-center mt-1 italic">
+                  {account.sector}
+              </div>
+            )}
             </div>
             <Button 
               variant="outline"
@@ -538,15 +539,8 @@ const handleSubmit = async (e: React.FormEvent) => {
               Editar
             </Button>
           </div>
-
+            
           <div className="flex gap-6 text-sm text-slate-600">
-            {account.sector && (
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-white">
-                  {account.sector}
-                </Badge>
-              </div>
-            )}
             {account.web_site && (
               <div className="flex items-center gap-2">
                 <Globe className="h-4 w-4 text-indigo-600" />
