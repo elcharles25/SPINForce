@@ -43,6 +43,7 @@ lerna-debug.log*
 
 # Archivos temporales del backend
 spimforce/backend/temp/*
+spimforce/backend/*.ps1
 spimforce/backend/temp/inbox_cache/*
 !spimforce/backend/temp/.gitkeep
 !spimforce/backend/temp/inbox_cache/.gitkeep

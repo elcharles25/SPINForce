@@ -14,6 +14,7 @@ import { formatDateES } from "@/utils/dateFormatter";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { replaceTemplateVariables, formatAttachments, getMonthName } from "@/utils/emailTemplates";
 import {
   Select,
   SelectContent,
@@ -552,207 +553,165 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
     }
   };
 
-  const handleCreateDraftsFromDialog = async () => {
-    if (!currentDistributionId || Object.keys(webinarsByRole).length === 0) {
-      toast({ 
-        title: "Error", 
-        description: "No hay datos de webinars disponibles", 
-        variant: "destructive" 
-      });
-      return;
-    }
+const handleCreateDraftsFromDialog = async () => {
+  if (!currentDistributionId || Object.keys(webinarsByRole).length === 0) {
+    toast({ title: "Error", description: "No hay datos de webinars disponibles", variant: "destructive" });
+    return;
+  }
 
-    setCreatingDrafts(true);
+  setCreatingDrafts(true);
 
-    try {
-      const allContacts = await db.getContacts();
-      const contactsWithWebinars = allContacts.filter((c: any) => 
-        c.webinars_subscribed && 
-        Array.isArray(c.webinars_subscribed) && 
-        c.webinars_subscribed.length > 0
-      );
+  try {
+    // ✅ Una sola llamada para obtener todos los datos necesarios
+    const [allContacts, currentDistribution, emailSignature, emailTemplate] = await Promise.all([
+      db.getContacts(),
+      db.getDistribution(currentDistributionId),
+      db.getSetting('email_signature'),
+      db.getSetting('webinar_email_template')
+    ]);
 
-      if (contactsWithWebinars.length === 0) {
-        toast({ 
-          title: "Sin contactos", 
-          description: "No hay contactos suscritos a webinars", 
-          variant: "destructive" 
-        });
-        return;
-      }
+    const contactsWithWebinars = allContacts.filter((c: any) => 
+      Boolean(c.webinars_subscribed) && c.webinar_role?.trim()
+    );
 
-      const accountManagerSetting = await db.getSetting('account_manager');
-      const emailSignatureSetting = await db.getSetting('email_signature');
-      const emailTemplateSetting = await db.getSetting('webinar_email_template');
-
-      const accountManager = accountManagerSetting?.value || {};
-      const signature = emailSignatureSetting?.value?.signature || '';
-      const emailTemplate = emailTemplateSetting?.value || {};
-
-      const draftsToCreate = contactsWithWebinars.map((contact: any) => {
-        const role = contact.gartner_role || contact.webinar_role;
-        const webinars = webinarsByRole[role] || [];
-
-        let emailBody = emailTemplate.html || '';
-        
-        emailBody = emailBody
-          .replace(/{{Nombre}}/g, contact.first_name || '')
-          .replace(/{{nombre}}/g, contact.first_name || '')
-          .replace(/{{Organización}}/g, contact.organization || '')
-          .replace(/{{mes}}/g, month.split('-')[1])
-          .replace(/{{anio}}/g, month.split('-')[0]);
-
-        if (webinars.length > 0) {
-          const webinarRows = webinars.map((w: WebinarInfo, idx: number) => `
-            <tr>
-              <td>${w.date}</td>
-              <td>${w.time}</td>
-              <td>${w.title}</td>
-              <td>${w.analyst}</td>
-            </tr>
-          `).join('');
-          
-          emailBody = emailBody.replace(
-            '</table>',
-            webinarRows + '</table>'
-          );
-        }
-
-        emailBody += signature;
-
-        return {
-          to: contact.email,
-          subject: emailTemplate.subject || `Webinars Gartner ${month}`,
-          body: emailBody,
-        };
-      });
-
-      createDraftsBatch({ emails: draftsToCreate }, {
-        onSuccess: async () => {
-          toast({ 
-            title: "Éxito", 
-            description: `${draftsToCreate.length} borradores creados en Outlook` 
-          });
-
-          await db.updateDistribution(currentDistributionId, { 
-            sent: true, 
-            sent_at: new Date().toISOString() 
-          });
-          
-          setShowWebinarsDialog(false);
-          setWebinarsByRole({});
-          setCurrentDistributionId(null);
-          fetchDistributions();
-        },
-        onError: (error) => {
-          toast({ 
-            title: "Error", 
-            description: "No se pudieron crear los borradores", 
-            variant: "destructive" 
-          });
-        }
-      });
-
-    } catch (error) {
-      console.error("Error creando drafts:", error);
-      toast({ 
-        title: "Error", 
-        description: "Error al preparar los borradores", 
-        variant: "destructive" 
-      });
-    } finally {
+    if (contactsWithWebinars.length === 0) {
+      toast({ title: "Sin contactos", description: "No hay contactos suscritos a webinars", variant: "destructive" });
       setCreatingDrafts(false);
-    }
-  };
-
-  const handleSendMassEmails = async () => {
-    if (selectedContactIds.size === 0) {
-      toast({
-        title: "Error",
-        description: "Debes seleccionar al menos un contacto",
-        variant: "destructive"
-      });
       return;
     }
 
-    if (!emailSubject.trim() || !emailBody.trim()) {
-      toast({
-        title: "Error",
-        description: "El asunto y el cuerpo del email son obligatorios",
-        variant: "destructive"
-      });
-      return;
-    }
+    const signature = emailSignature?.value?.signature || '';
+    const template = emailTemplate?.value || {};
+    
+    // ✅ Calcular el mes una sola vez
+    const [ano, mes] = currentDistribution.month.split('-');
+    const mesNombre = getMonthName(parseInt(mes));
 
-    setSendingEmails(true);
+    // ✅ Construir emails de forma más eficiente
+    const draftsToCreate = contactsWithWebinars.map((contact: any) => {
+      const role = contact.webinar_role || contact.gartner_role;
+      const webinars = webinarsByRole[role] || [];
+      const [webinar1, webinar2] = webinars;
 
-    try {
-      const emailSignatureSetting = await db.getSetting('email_signature');
-      const signature = emailSignatureSetting?.value?.signature || '';
+      // ✅ Un solo objeto con todas las variables
+      const variables = {
+        Nombre: contact.first_name,
+        nombre: contact.first_name,
+        Organización: contact.organization,
+        mes: mesNombre,
+        anio: ano,
+        Fecha1: webinar1?.date || '',
+        Hora1: webinar1?.time || '',
+        Webinar1: webinar1?.title || '',
+        Analista1: webinar1?.analyst || '',
+        Fecha2: webinar2?.date || '',
+        Hora2: webinar2?.time || '',
+        Webinar2: webinar2?.title || '',
+        Analista2: webinar2?.analyst || ''
+      };
 
-      const selectedContacts = filteredContacts.filter(c => selectedContactIds.has(c.id));
-
-      const draftsToCreate = selectedContacts.map((contact) => {
-        let personalizedBody = emailBody
-          .replace(/{{Nombre}}/g, contact.first_name || '')
-          .replace(/{{nombre}}/g, contact.first_name || '')
-          .replace(/{{Apellido}}/g, contact.last_name || '')
-          .replace(/{{Organization}}/g, contact.organization || '')
-          .replace(/{{Organización}}/g, contact.organization || '')
-          .replace(/{{Titulo}}/g, contact.title || '')
-          .replace(/{{Título}}/g, contact.title || '');
-
-        personalizedBody += signature;
-
-        const draft: any = {
+      return {
           to: contact.email,
-          subject: emailSubject,
-          body: personalizedBody,
-        };
+          subject: replaceTemplateVariables(template.subject || `Webinars Gartner ${mesNombre} ${ano}`, variables),
+          body: replaceTemplateVariables(template.html || '', variables) + signature,
+          attachments: [{
+            filename: currentDistribution.file_name,
+            content: currentDistribution.file_url.startsWith('http')   // ✅ url → content
+              ? currentDistribution.file_url 
+              : `http://localhost:3001${currentDistribution.file_url}`
+          }]
+      };
+    });
 
-        if (attachedFiles.length > 0) {
-          draft.attachments = attachedFiles.map(file => ({
-            name: file.name,
-            url: `http://localhost:3001${file.url}`
-          }));
-        }
+    createDraftsBatch({ emails: draftsToCreate }, {
+      onSuccess: async () => {
+        await db.updateDistribution(currentDistributionId, { 
+          ...currentDistribution,
+          sent: true, 
+          sent_at: new Date().toISOString() 
+        });
+        
+        await fetchDistributions();
+        
+        toast({ title: "Éxito", description: `${draftsToCreate.length} borradores creados en Outlook` });
+        
+        setShowWebinarsDialog(false);
+        setWebinarsByRole({});
+        setCurrentDistributionId(null);
+        setCreatingDrafts(false);
+      },
+      onError: () => {
+        toast({ title: "Error", description: "No se pudieron crear los borradores", variant: "destructive" });
+        setCreatingDrafts(false);
+      }
+    });
 
-        return draft;
-      });
+  } catch (error) {
+    console.error("Error creando drafts:", error);
+    toast({ title: "Error", description: "Error al preparar los borradores", variant: "destructive" });
+    setCreatingDrafts(false);
+  }
+};
 
-      createDraftsBatch({ emails: draftsToCreate }, {
-        onSuccess: () => {
-          toast({
-            title: "Éxito",
-            description: `${draftsToCreate.length} borradores creados en Outlook`
-          });
+const handleSendMassEmails = async () => {
+  if (selectedContactIds.size === 0 || !emailSubject.trim() || !emailBody.trim()) {
+    toast({ title: "Error", description: "Completa todos los campos requeridos", variant: "destructive" });
+    return;
+  }
 
-          setSelectedRole('');
-          setSelectedContactIds(new Set());
-          setEmailSubject('');
-          setEmailBody('');
-          setAttachedFiles([]);
-        },
-        onError: (error) => {
-          toast({
-            title: "Error",
-            description: "No se pudieron crear los borradores",
-            variant: "destructive"
-          });
-        }
-      });
+  setSendingEmails(true);
 
-    } catch (error) {
-      console.error("Error enviando emails masivos:", error);
-      toast({
-        title: "Error",
-        description: "Error al preparar los emails",
-        variant: "destructive"
-      });
-    } finally {
-      setSendingEmails(false);
-    }
-  };
+  try {
+    // ✅ Una sola llamada
+    const emailSignature = await db.getSetting('email_signature');
+    const signature = emailSignature?.value?.signature || '';
+    const selectedContacts = filteredContacts.filter(c => selectedContactIds.has(c.id));
+
+    const draftsToCreate = selectedContacts.map((contact) => {
+      const variables = {
+        Nombre: contact.first_name,
+        nombre: contact.first_name,
+        Apellido: contact.last_name,
+        Organization: contact.organization,
+        Organización: contact.organization,
+        Titulo: contact.title,
+        Título: contact.title
+      };
+
+      return {
+        to: contact.email,
+        subject: replaceTemplateVariables(emailSubject, variables),
+        body: replaceTemplateVariables(emailBody, variables) + signature,
+        attachments: attachedFiles.length > 0 
+          ? attachedFiles.map(file => ({
+              filename: file.name,
+              content: file.url.startsWith('http') ? file.url : `http://localhost:3001${file.url}`
+            }))
+          : undefined
+          };
+    });
+
+    createDraftsBatch({ emails: draftsToCreate }, {
+      onSuccess: () => {
+        toast({ title: "Éxito", description: `${draftsToCreate.length} borradores creados` });
+        setSelectedRole('');
+        setSelectedContactIds(new Set());
+        setEmailSubject('');
+        setEmailBody('');
+        setAttachedFiles([]);
+      },
+      onError: () => {
+        toast({ title: "Error", description: "No se pudieron crear los borradores", variant: "destructive" });
+      }
+    });
+
+  } catch (error) {
+    console.error("Error:", error);
+    toast({ title: "Error", description: "Error al preparar los emails", variant: "destructive" });
+  } finally {
+    setSendingEmails(false);
+  }
+};
 
   const handleDelete = async (id: string, fileUrl: string) => {
     if (!confirm("¿Eliminar esta distribución?")) return;
