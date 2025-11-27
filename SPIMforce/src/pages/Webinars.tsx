@@ -68,17 +68,6 @@ interface AttachedFile {
   size: number;
 }
 
-const GARTNER_ROLES = [
-  'CIO',
-  'CISO',
-  'CDAO',
-  'Talent',
-  'Workplace',
-  'Procurement',
-  'Enterprise Architect',
-  'CAIO',
-  'Infrastructure & Operations'
-];
 
 const Webinars = () => {
   const [distributions, setDistributions] = useState<WebinarDistribution[]>([]);
@@ -95,6 +84,7 @@ const Webinars = () => {
   const [showWebinarsDialog, setShowWebinarsDialog] = useState(false);
   const [currentDistributionId, setCurrentDistributionId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [availableRoles, setAvailableRoles] = useState<string[]>([]);
 
   // Estados para emails masivos
   const [selectedRole, setSelectedRole] = useState<string>('');
@@ -158,18 +148,39 @@ const Webinars = () => {
   };
 
   const fetchContacts = async () => {
-    try {
-      const data = await db.getContacts();
-      setContacts(data || []);
-    } catch (error) {
-      console.error("Error cargando contactos:", error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los contactos",
-        variant: "destructive"
-      });
-    }
-  };
+  try {
+    const data = await db.getContacts();
+    setContacts(data || []);
+    
+  const roles = Array.from(new Set(
+    (data || [])
+      .map(c => c.gartner_role)
+      .filter(role => role && role.trim() !== '')
+  )) as string[];
+
+  const roleOrder = ["CIO", "CTO", "CISO", "CDAO", "CAIO", "CInO", "Infrastructure & Operations", "D.Transformación", "Enterprise Architect", "Procurement"];
+
+  roles.sort((a, b) => {
+    const indexA = roleOrder.indexOf(a);
+    const indexB = roleOrder.indexOf(b);
+    
+    if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    
+    return indexA - indexB;
+  });
+
+  setAvailableRoles(roles);
+  } catch (error) {
+    console.error("Error cargando contactos:", error);
+    toast({
+      title: "Error",
+      description: "No se pudieron cargar los contactos",
+      variant: "destructive"
+    });
+  }
+};
 
   const fetchDistributions = async () => {
     try {
@@ -909,13 +920,13 @@ const handleSendMassEmails = async () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label htmlFor="gartner-role">Seleccionar Rol de Gartner</Label>
+                  <Label htmlFor="gartner-role">Seleccionar Rol</Label>
                   <Select value={selectedRole} onValueChange={handleRoleChange}>
                     <SelectTrigger id="gartner-role">
                       <SelectValue placeholder="Selecciona un rol" />
                     </SelectTrigger>
                     <SelectContent>
-                      {GARTNER_ROLES.map((role) => (
+                      {availableRoles.map((role) => (
                         <SelectItem key={role} value={role}>
                           {role}
                         </SelectItem>
