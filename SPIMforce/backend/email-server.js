@@ -29,6 +29,10 @@
   const PORT = 3002;
   const execPromise = promisify(exec);
 
+    // ⭐ FLAGS GLOBALES para control de inicialización de caché
+  let cacheInitializationInProgress = false;
+  let cacheInitializationPromise = null;
+
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb' }));
@@ -1904,6 +1908,18 @@ const getLastCacheDate = async () => {
  * - Cachés incrementales: desde última caché hasta hoy (máximo 30 días por archivo)
  */
 const createIncrementalCache = async (silent = false) => {
+  // ⭐ EVITAR MÚLTIPLES CONSTRUCCIONES SIMULTÁNEAS
+  if (cacheInitializationInProgress) {
+    console.log('⚠️ Ya hay una construcción de caché en progreso...');
+    if (cacheInitializationPromise) {
+      return await cacheInitializationPromise;
+    }
+    return { success: false, message: 'Construcción en progreso', daysAdded: 0 };
+  }
+
+  // ⭐ MARCAR COMO EN PROGRESO
+  cacheInitializationInProgress = true;
+  
   try {
     if (!silent) console.log('\n🔄 Creando caché incremental del inbox...');
     
@@ -1985,8 +2001,57 @@ const createIncrementalCache = async (silent = false) => {
   } catch (error) {
     console.error('❌ Error creando caché incremental:', error);
     throw error;
+  } finally {
+    // ⭐ SIEMPRE LIBERAR EL FLAG
+    cacheInitializationInProgress = false;
+    cacheInitializationPromise = null;
   }
 };
+
+/**
+ * Inicializa el caché en background al arrancar el servidor
+ */
+const initializeCacheOnStartup = async () => {
+  try {
+    console.log('\n🔍 Verificando estado del caché...');
+    
+    const cacheFiles = await getCacheFiles();
+    
+    if (cacheFiles.length === 0) {
+      console.log('⚠️ No hay caché disponible - iniciando construcción en BACKGROUND');
+      console.log('🚀 La aplicación seguirá funcionando mientras se construye el caché');
+      console.log('⏳ Este proceso puede tardar varios minutos (365 días de emails)\n');
+      
+      // ⭐ EJECUTAR EN BACKGROUND SIN BLOQUEAR
+      cacheInitializationPromise = createIncrementalCache(false)
+        .then(result => {
+          if (result.success) {
+            console.log('\n✅✅✅ CACHÉ INICIAL COMPLETADA ✅✅✅');
+            console.log(`📊 ${result.emailCount} emails guardados`);
+            console.log(`📅 Rango: ${result.startDate} → ${result.endDate}\n`);
+          } else {
+            console.error('⚠️ Construcción de caché terminó sin éxito:', result.message);
+          }
+          return result;
+        })
+        .catch(err => {
+          console.error('❌ Error en construcción de caché:', err.message);
+          return { success: false, message: err.message };
+        });
+      
+      // ⭐ NO ESPERAR - Continuar con el arranque del servidor
+      console.log('✅ Construcción de caché iniciada en background');
+      
+    } else {
+      console.log(`✅ Caché encontrada: ${cacheFiles.length} archivo(s)`);
+      const lastCacheDate = await getLastCacheDate();
+      console.log(`📅 Última actualización: ${lastCacheDate}\n`);
+    }
+  } catch (error) {
+    console.error('⚠️ Error verificando caché:', error.message);
+  }
+};
+
 
 /**
  * Obtiene emails combinando caché + inbox reciente
@@ -2012,40 +2077,29 @@ const getEmailsWithCache = async (daysBack) => {
     const lastCacheDate = await getLastCacheDate();
     console.log(`📅 Última fecha en caché: ${lastCacheDate || 'No hay caché'}`);
     
-    // ========== SI NO HAY CACHÉ: CREAR PRIMERO (BLOQUEANTE) ==========
+// ========== SI NO HAY CACHÉ: VERIFICAR SI SE ESTÁ CONSTRUYENDO ==========
     if (cacheFiles.length === 0) {
-      console.log(`\n🚨 NO HAY CACHÉ - Creando primera caché (365 días)...`);
-      console.log(`⏳ Este proceso es BLOQUEANTE - esperando a que termine...`);
+      console.log(`\n🚨 NO HAY CACHÉ DISPONIBLE`);
       
-      try {
-        const cacheResult = await createIncrementalCache(false); // false = mostrar logs
+      // ⭐ VERIFICAR SI YA SE ESTÁ CONSTRUYENDO EN BACKGROUND
+      if (cacheInitializationInProgress && cacheInitializationPromise) {
+        console.log(`⏳ Caché en construcción en background...`);
+        console.log(`⚠️ FALLBACK: Descargando últimos ${Math.min(daysBack, 30)} días directamente`);
         
-        if (cacheResult.success) {
-          console.log(`\n✅ CACHÉ INICIAL CREADA EXITOSAMENTE`);
-          console.log(`   Emails guardados: ${cacheResult.emailCount}`);
-          console.log(`   Rango: ${cacheResult.startDate} → ${cacheResult.endDate}`);
-          
-          // Ahora que la caché está creada, leer desde ella
-          console.log(`\n📖 Leyendo desde la caché recién creada...`);
-          const cachedEmails = await readFromCache(startDateStr, cacheResult.endDate);
-          
-          console.log(`\n📊 === RESUMEN FINAL ===`);
-          console.log(`   📂 Desde caché: ${cachedEmails.length}`);
-          console.log(`   📥 Desde inbox: 0 (todo en caché)`);
-          console.log(`   ✅ Total único: ${cachedEmails.length}`);
-          console.log(`=========================\n`);
-          
-          return cachedEmails;
-        } else {
-          console.error(`❌ Error creando caché inicial: ${cacheResult.message}`);
-          console.log(`⚠️ FALLBACK: Descargando directamente del inbox`);
-          return await readOutlookInbox(daysBack);
-        }
-      } catch (error) {
-        console.error(`❌ Error creando caché inicial:`, error);
-        console.log(`⚠️ FALLBACK: Descargando directamente del inbox`);
-        return await readOutlookInbox(daysBack);
+        // Mientras tanto, obtener emails recientes directamente
+        const fallbackEmails = await readOutlookInbox(Math.min(daysBack, 30));
+        
+        console.log(`\n📊 === RESUMEN TEMPORAL ===`);
+        console.log(`   📥 Emails obtenidos (fallback): ${fallbackEmails.length}`);
+        console.log(`   ⚠️ Nota: Caché completa se está construyendo en background`);
+        console.log(`=========================\n`);
+        
+        return fallbackEmails;
       }
+      
+      // Si no se está construyendo, algo falló - usar fallback directo
+      console.log(`⚠️ No hay construcción en progreso - usando fallback directo`);
+      return await readOutlookInbox(Math.min(daysBack, 90));
     }
     
     // ========== SI HAY CACHÉ: PROCESO NORMAL ==========
@@ -2565,12 +2619,14 @@ app.get('/api/outlook/emails-with-cache', async (req, res) => {
   }
 });
 
-  app.listen(PORT, () => {
-    console.log(`\n✅ Servidor de email ejecutándose en http://localhost:${PORT}`);
-    console.log('\nEndpoints disponibles:');
-    console.log('  POST /api/draft-email - Crear un borrador');
-    console.log('  POST /api/draft-emails-batch - Crear múltiples borradores');
-    console.log('  GET /api/health - Health check');
-    console.log('  POST /api/campaigns/check-all-replies - Revisar respuestas\n');
+  app.listen(PORT, async () => {
+      console.log(`\n✅ Servidor de email ejecutándose en http://localhost:${PORT}`);
+      console.log('\nEndpoints disponibles:');
+      console.log('  POST /api/draft-email - Crear un borrador');
+      console.log('  POST /api/draft-emails-batch - Crear múltiples borradores');
+      console.log('  GET /api/health - Health check');
+      console.log('  POST /api/campaigns/check-all-replies - Revisar respuestas\n');
 
-  });
+      // ⭐ INICIALIZAR CACHÉ EN BACKGROUND AL ARRANCAR
+      await initializeCacheOnStartup();
+    });
