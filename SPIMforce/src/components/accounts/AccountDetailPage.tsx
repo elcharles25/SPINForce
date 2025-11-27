@@ -69,6 +69,7 @@ interface Contact {
   email: string;
   last_contact_date: string;
   phone: string | null;
+  photo_url?: string | null;
 }
 
 interface CorporativeObjective {
@@ -1028,41 +1029,58 @@ const handleContactSelect = (nodeId: string, contactId: string) => {
                         )}
                       </div>
                     ) : (
-                      <>
-                        <div
-                          className="mb-2 text-center"
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            setEditingNode(node.id);
-                          }}
-                        >
-                          <p className="font-semibold text-sm text-slate-800 truncate">
-                            {node.name || 'Sin nombre'}
-                          </p>
-                          <p className="text-sm text-slate-500 truncate italic">{node.role || 'Sin rol'}</p>
-                        </div>
-                        {selectedNode === node.id && (
-                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setConnectingFrom(node.id)}
-                              className="flex-1 h-7 text-xs"
-                              disabled={connectingFrom === node.id}
-                            >
-                              <GitBranch className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => deleteOrgNode(node.id)}
-                              className="h-7 px-2 text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
-                      </>
+                     <>
+  {(() => {
+    const contact = getContactById(node.name);
+    return (
+      <>
+        {contact?.photo_url && (
+          <img
+            src={`http://localhost:3001${contact.photo_url}?t=${Date.now()}`}
+            alt={node.name}
+            className="absolute -top-4 -left-6 w-12 h-12 rounded-full object-cover border-2 border-white shadow-md z-10"
+          />
+        )}
+      </>
+    );
+  })()}
+  
+  <div
+    onDoubleClick={(e) => {
+      e.stopPropagation();
+      setEditingNode(node.id);
+    }}
+  >
+    <div className="text-left">
+      <p className="font-semibold text-center text-sm text-slate-800 truncate">
+        {node.name || 'Sin nombre'}
+      </p>
+      <p className="text-sm text-center text-slate-500 truncate italic">{node.role || 'Sin rol'}</p>
+    </div>
+  </div>
+  
+  {selectedNode === node.id && (
+    <div className="flex gap-1 mt-2" onClick={(e) => e.stopPropagation()}>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => setConnectingFrom(node.id)}
+        className="flex-1 h-7 text-xs"
+        disabled={connectingFrom === node.id}
+      >
+        <GitBranch className="h-3 w-3" />
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => deleteOrgNode(node.id)}
+        className="h-7 px-2 text-red-600 hover:bg-red-50"
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
+  )}
+</>
                     )}
                   </div>
                 </div>
