@@ -65,6 +65,7 @@ interface Contact {
   last_name: string;
   title: string;
   contact_type: string;
+  gartner_role: string;
   email: string;
   last_contact_date: string;
   phone: string | null;
@@ -365,6 +366,17 @@ export default function AccountDetailPage() {
       bgColor: isOldContact ? 'bg-yellow-100' : 'bg-white'
     };
   };
+
+  const getMissingRoles = () => {
+  const requiredRoles = [
+    "CIO", "CTO", "CISO", "CDAO", "CAIO", "CInO", 
+    "Infrastructure & Operations", "D. Transformación", "Enterprise Architect"
+  ];
+  
+  const existingRoles = contacts.map(c => c.gartner_role);
+  
+  return requiredRoles.filter(role => !existingRoles.includes(role));
+};
 
   const handleLogoUpload = async (file: File) => {
     if (!account) return;
@@ -1088,9 +1100,31 @@ const handleContactSelect = (nodeId: string, contactId: string) => {
             <div className="text-xs text-slate-600 p-1 rounded-lg border-2 border-blue-500 bg-white shadow-sm">Oportunidad</div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-xs text-slate-600 p-1 rounded-lg border-2 border-slate-300 bg-yellow-100 shadow-sm">+60 días sin contacto</div>  
+            <div className="text-xs text-slate-600 p-1 rounded-lg border-2 border-slate-300 bg-yellow-100 shadow-sm">+2 meses sin contacto</div>  
           </div>
         </div>
+
+        {(() => {
+          const missingRoles = getMissingRoles();
+          
+          if (missingRoles.length === 0) return null;
+          
+          return (
+            <div className="mb-4 mx-6 p-4 bg-slate-50 border-slate-200 rounded-lg rounded-lg border-2 overflow-hidden">
+              <h4 className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Roles sin identificar ({missingRoles.length})
+              </h4>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {missingRoles.map((role) => (
+                  <div className="text-sm text-slate-600 p-3 rounded-lg border-2  bg-white border-red-300">
+                    {role}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </Card>
 
       <Card className="shadow-sm rounded-2xl">

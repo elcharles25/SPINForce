@@ -95,7 +95,7 @@ const FEELING_OPTIONS = [
   { value: 'Muy mal', label: 'Muy mal', color: 'bg-red-500' },
 ];
 
-const GARTNER_ROLES = ["CIO", "CISO", "CDAO", "CAIO", "CTO", "Infrastructure & Operations", "D.Transformación", "CInO", "Procurement", "Enterprise Architect"];
+const GARTNER_ROLES = ["CIO", "CISO", "CDAO", "CAIO", "CTO", "Infrastructure & Operations", "D. Transformación", "CInO", "Procurement", "Enterprise Architect"];
 const TIPO_CLIENTE = ["Cliente","Cliente proxy", "Oportunidad", "Prospect"];
 const WEBINARS_ROLES = ["CIO", "CISO", "CDAO", "CAIO", "Infrastructure & Operations", "Talent", "Workplace", "Procurement", "Enterprise Architect"];
 const CSM_LIST = [

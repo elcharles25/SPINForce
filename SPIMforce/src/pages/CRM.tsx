@@ -41,7 +41,7 @@ interface Contact {
   last_email_check?: string | null;
 }
 
-const GARTNER_ROLES = ["CIO", "CTO", "CISO", "CDAO", "CAIO", "CInO", "Infrastructure & Operations", "D.Transformación", "Enterprise Architect", "Procurement"];
+const GARTNER_ROLES = ["CIO", "CTO", "CISO", "CDAO", "CAIO", "CInO", "Infrastructure & Operations", "D. Transformación", "Enterprise Architect", "Procurement"];
 const TIPO_CLIENTE = ["Cliente","Cliente proxy", "Oportunidad", "Prospect"];
 const WEBINARS_ROLES = ["CIO", "CISO", "CDAO", "CAIO", "Infrastructure & Operations", "Talent", "Workplace", "Procurement", "Enterprise Architect"];
 const CSM_LIST = [
