@@ -95,7 +95,7 @@ const FEELING_OPTIONS = [
   { value: 'Muy mal', label: 'Muy mal', color: 'bg-red-500' },
 ];
 
-const GARTNER_ROLES = ["CIO", "CISO", "CDAO", "CAIO", "CTO", "Infrastructure & Operations", "D. Transformación", "CInO", "Procurement", "Enterprise Architect"];
+const GARTNER_ROLES = ["CIO", "CTO", "CISO", "CDAO", "CAIO", "CInO", "Infrastructure & Operations", "D. Transformación", "Enterprise Architect", "Procurement"];
 const TIPO_CLIENTE = ["Cliente","Cliente proxy", "Oportunidad", "Prospect"];
 const WEBINARS_ROLES = ["CIO", "CISO", "CDAO", "CAIO", "Infrastructure & Operations", "Talent", "Workplace", "Procurement", "Enterprise Architect"];
 const CSM_LIST = [
@@ -1843,15 +1843,7 @@ const handleShowMore = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="last_contact_date">Último Contacto</Label>
-                <Input
-                  id="last_contact_date"
-                  type="date"
-                  value={formData.last_contact_date}
-                  onChange={(e) => setFormData({ ...formData, last_contact_date: e.target.value })}
-                />
-              </div>
+            
               <div>
                 <Label htmlFor="pa_name">Nombre PA</Label>
                 <Input
