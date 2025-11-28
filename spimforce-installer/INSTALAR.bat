@@ -28,20 +28,29 @@ if %ERRORLEVEL% neq 0 (
     if !INSTALL_RESULT! equ 2 (
         REM El usuario instaló manualmente Node.js
         REM Crear script VBS para reiniciar con variables actualizadas
-        call :CreateRestartScript
-        
         echo.
         echo ══════════════════════════════════════════════════════════
         echo   Node.js instalado - Reiniciando instalador...
         echo ══════════════════════════════════════════════════════════
         echo.
-        echo El instalador se reiniciará automáticamente en 3 segundos
-        echo para cargar las variables de entorno actualizadas...
-        echo.
-        timeout /t 3 /nobreak > nul
+        echo Creando script de reinicio...
         
-        REM Ejecutar el script VBS que reinicia el instalador
-        cscript //nologo "%TEMP%\restart-installer.vbs"
+        set "VBS_SCRIPT=%TEMP%\restart-installer.vbs"
+        set "BATCH_PATH=%~f0"
+        set "BATCH_DIR=%CD%"
+        
+        echo Set WshShell = CreateObject("WScript.Shell") > "!VBS_SCRIPT!"
+        echo WScript.Sleep 1500 >> "!VBS_SCRIPT!"
+        echo WshShell.CurrentDirectory = "!BATCH_DIR!" >> "!VBS_SCRIPT!"
+        echo WshShell.Run "cmd.exe /c INSTALAR.bat --restart", 1, False >> "!VBS_SCRIPT!"
+        
+        echo Script creado en: !VBS_SCRIPT!
+        echo.
+        echo Ejecutando reinicio en 2 segundos...
+        timeout /t 2 /nobreak > nul
+        
+        REM Ejecutar el script VBS
+        start "" wscript.exe "!VBS_SCRIPT!"
         
         REM Cerrar esta ventana
         exit
@@ -59,6 +68,13 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :SkipNodeInstall
+
+REM Limpiar script VBS si existe
+if exist "%TEMP%\restart-installer.vbs" del "%TEMP%\restart-installer.vbs"
+
+echo.
+echo Continuando con la instalación...
+echo.
 
 for /f "tokens=*" %%i in ('node --version 2^>nul') do set NODE_VER=%%i
 echo       Node.js %NODE_VER%
@@ -222,27 +238,3 @@ echo.
 echo ✅ Node.js instalado correctamente
 echo.
 exit /b 0
-
-:CreateRestartScript
-set "VBS_SCRIPT=%TEMP%\restart-installer.vbs"
-
-(
-echo Set WshShell = CreateObject^("WScript.Shell"^)
-echo Set objFSO = CreateObject^("Scripting.FileSystemObject"^)
-echo.
-echo ' Obtener la ruta completa del instalador
-echo installerPath = "%~f0"
-echo installerDir = "%CD%"
-echo.
-echo ' Esperar 1 segundo para que se cierre la ventana anterior
-echo WScript.Sleep 1000
-echo.
-echo ' Cambiar al directorio del instalador y ejecutar con el parámetro --restart
-echo WshShell.Run "cmd /c cd /d """ ^& installerDir ^& """ ^&^& INSTALAR.bat --restart", 1, False
-echo.
-echo ' Autodestruir el script VBS
-echo WScript.Sleep 2000
-echo objFSO.DeleteFile WScript.ScriptFullName, True
-) > "%VBS_SCRIPT%"
-
-goto :eof
