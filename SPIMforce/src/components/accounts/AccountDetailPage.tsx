@@ -76,6 +76,7 @@ interface CorporativeObjective {
   title: string;
   description: string;
   completion_date: string;
+  source: string;
 }
 
 interface OrgChartNode {
@@ -107,12 +108,12 @@ const analyzeWithGemini = async (contacts: Contact[], accountName: string): Prom
     `- ${c.first_name} ${c.last_name} (${c.title}) - Tipo: ${c.contact_type}`
   ).join('\n');
 
-  const fullPrompt = `Analiza la siguiente información de la organización "${accountName}" y sus contactos clave para identificar los objetivos corporativos que puedan estar persiguiendo.
+  const fullPrompt = `Analiza la siguiente información de la organización "${accountName}" y sus contactos clave para identificar sus objetivos corporativos.
 
 CONTACTOS DE LA ORGANIZACIÓN:
 ${contactsInfo}
 
-Basándote en los roles y títulos de los contactos, identifica los objetivos corporativos más probables de esta organización.
+Basándote en la información disponible en internet sobre el último plan estratégico, ultimas noticias, informes de resultados, información en la web, etc., identifica los objetivos corporativos de esta organización, incluyendo una descripción detallada de los mismos y la fecha en la que deben ser completados y las fuentes de información.
 
 IMPORTANTE: Devuelve SOLO un objeto JSON válido (sin markdown, sin \`\`\`json) con esta estructura exacta:
 {
@@ -120,7 +121,8 @@ IMPORTANTE: Devuelve SOLO un objeto JSON válido (sin markdown, sin \`\`\`json) 
     {
       "title": "Título del objetivo (máx 80 caracteres)",
       "description": "Descripción detallada del objetivo estratégico (máx 300 caracteres)",
-      "completion_date": "YYYY-MM-DD"
+      "completion_date": "YYYY-MM-DD",
+      "source": "Fuente de información"
     }
   ]
 }
@@ -899,7 +901,11 @@ const handleContactSelect = (nodeId: string, contactId: string) => {
                   <p className="text-sm text-slate-600 leading-relaxed">
                     {objective.description}
                   </p>
+                  <p className="text-sm itaic text-slate-400 leading-relaxed">
+                    Fuente: {objective.source}
+                  </p>
                 </div>
+                
               ))
             )}
           </div>

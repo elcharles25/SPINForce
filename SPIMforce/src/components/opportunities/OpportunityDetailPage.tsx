@@ -251,6 +251,51 @@ const PROMPT_CUALIFICACION = `En base a la información contenida en el fichero 
           "initiatives": []
         }`;
 
+const PROMPT_PRIORIDADES_POTENCIALES = `Eres un experto en identificación de prioridades estratégicas para ejecutivos de tecnología y transformación digital.
+
+Analiza la siguiente información:
+- Organización: [ORGANIZATION]
+- Objetivos Corporativos de la organización: [CORPORATE_OBJECTIVES]
+- Rol del contacto: [CONTACT_ROLE]
+
+Basándote en:
+1. Los objetivos corporativos de la organización
+2. El rol específico del contacto
+3. Las tendencias actuales del sector
+4. Las mejores prácticas de Gartner para ese rol
+
+Identifica las prioridades potenciales que este contacto debería tener para contribuir a los objetivos corporativos de su organización.
+
+Para cada prioridad potencial, proporciona:
+1. Título: claro y conciso (máx 60 caracteres)
+2. Reto principal: Reto principal que aborda la prioridad (máx 150 caracteres)
+3. Justificación: Por qué esta prioridad es relevante dado el rol del contacto y los objetivos corporativos
+4. Valor Gartner: Cómo Gartner puede ayudar específicamente con esta prioridad
+5. Iniciativas sugeridas: 2-3 iniciativas concretas que el contacto podría ejecutar
+
+IMPORTANTE: Devuelve SOLO JSON (sin markdown):
+{
+  "potential_priorities": [
+    {
+      "priority_title": "Título",
+      "priority_challenge": "Reto principal",
+      "justification": "Justificación de por qué es relevante",
+      "priority_gartner_value": "Valor que Gartner puede aportar",
+      "suggested_initiatives": [
+        {
+          "initiative_title": "Título iniciativa",
+          "initiative_description": "Descripción"
+        }
+      ]
+    }
+  ]
+}
+
+Si no hay suficiente información:
+{
+  "potential_priorities": []
+}`;
+
 export default function OpportunityDetailPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -301,6 +346,20 @@ export default function OpportunityDetailPage() {
   const [followUpLoading, setFollowUpLoading] = useState(false);
   const [showFollowUpLoader, setShowFollowUpLoader] = useState(false);
   const [createdMeetingDate, setCreatedMeetingDate] = useState(''); 
+  const [potentialPrioritiesLoading, setPotentialPrioritiesLoading] = useState(false);
+  const [potentialPriorities, setPotentialPriorities] = useState<Array<{
+    priority_title: string;
+    priority_challenge: string;
+    justification: string;
+    priority_gartner_value: string;
+    suggested_initiatives: Array<{
+      initiative_title: string;
+      initiative_description: string;
+    }>;
+  }>>([]);
+  const [potentialPriorityDialog, setPotentialPriorityDialog] = useState(false);
+  const [selectedPotentialPriority, setSelectedPotentialPriority] = useState<any>(null);
+  const [potentialPriorityDetailDialog, setPotentialPriorityDetailDialog] = useState(false);
 
   const [meetingForm, setMeetingForm] = useState<MeetingForm>({
     contact_id: '',
@@ -447,6 +506,79 @@ const loadData = async () => {
     console.error('Error cargando datos:', error);
   } finally {
     setLoading(false);
+  }
+};
+
+const handleAnalyzePotentialPriorities = async () => {
+  if (!opportunity?.contact_id) {
+    toast({
+      title: 'Sin información',
+      description: 'No se pudo obtener la información del contacto',
+      variant: 'destructive',
+    });
+    return;
+  }
+
+  setPotentialPrioritiesLoading(true);
+  try {
+    console.log('📊 Iniciando análisis de prioridades potenciales...');
+
+    // Obtener objetivos corporativos de la cuenta
+    const accountsData = await db.getAccounts();
+    const account = accountsData.find((acc: any) => acc.name === opportunity.contact.organization);
+    
+    let corporateObjectives = 'No se han identificado objetivos corporativos específicos para esta organización.';
+    
+    if (account?.corporative_objectives) {
+      try {
+        const parsed = JSON.parse(account.corporative_objectives);
+        if (parsed.objectives && parsed.objectives.length > 0) {
+          corporateObjectives = parsed.objectives.map((obj: any) => 
+            `- ${obj.title}: ${obj.description}`
+          ).join('\n');
+        }
+      } catch (error) {
+        console.error('Error parseando objetivos corporativos:', error);
+      }
+    }
+
+    const prompt = PROMPT_PRIORIDADES_POTENCIALES
+      .replace('[ORGANIZATION]', opportunity.contact.organization)
+      .replace('[CORPORATE_OBJECTIVES]', corporateObjectives)
+      .replace('[CONTACT_ROLE]', opportunity.contact.title);
+
+    const result = await analyzeWithGemini('', prompt);
+
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No se pudo extraer JSON de la respuesta');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const extractedPriorities = parsed.potential_priorities || [];
+
+    setPotentialPriorities(extractedPriorities);
+    setPotentialPriorityDialog(true);
+
+    toast({
+      title: 'Análisis completado',
+      description: `Se identificaron ${extractedPriorities.length} prioridad(es) potencial(es)`,
+    });
+  } catch (error) {
+    console.error('Error analizando prioridades potenciales:', error);
+
+    let errorMessage = 'Error al analizar prioridades potenciales';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    toast({
+      title: 'Error',
+      description: errorMessage,
+      variant: 'destructive',
+    });
+  } finally {
+    setPotentialPrioritiesLoading(false);
   }
 };
 
@@ -1259,8 +1391,23 @@ const handleDateClick = (date: Date | undefined) => {
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
             <div className="flex flex-col h-full gap-3">
-              <h3 className="text-base font-semibold text-slate-700 mb-3">Prompts para AE</h3>
-
+              <h3 className="text-base font-semibold text-slate-700 mb-3">Prompts para Account Executive</h3>
+              <Button
+                onClick={handleAnalyzePotentialPriorities}
+                disabled={geminiLoading || qualificationLoading || potentialPrioritiesLoading || meetings.length > 0}
+                className="w-full h-full flex flex-col items-center justify-center bg-white hover:bg-indigo-50 text-slate-700 border border-indigo-200 shadow-sm"
+                variant="outline"
+              >
+                {potentialPrioritiesLoading ? (
+                  <Loader2 className="h-5 w-5 mb-1 animate-spin text-indigo-500" />
+                ) : (
+                  <MessageSquare className="h-5 w-5 mb-[-5px] text-indigo-500" />
+                )}
+                <div className="text-center">
+                  <p className="text-sm">Identificar potenciales prioridades</p>
+                  <p className="text-xs italic text-slate-500">(análisis preliminar en base a Objetivos Corporativos y al rol)</p>
+                </div>
+              </Button>
               <Button
                 onClick={() => setCustomPromptDialog(true)}
                 disabled={geminiLoading || qualificationLoading || meetings.length === 0}
@@ -1270,7 +1417,7 @@ const handleDateClick = (date: Date | undefined) => {
                 {geminiLoading ? (
                   <Loader2 className="h-5 w-5 mb-1 animate-spin text-indigo-500" />
                 ) : (
-                  <MessageSquare className="h-5 w-5 mb-1 text-indigo-500" />
+                  <MessageSquare className="h-5 w-5 mb-[-5px] text-indigo-500" />
                 )}
                 <span className="text-sm text-center">Pregunta cualquier cosa sobre la oportunidad</span>
               </Button>
@@ -1334,14 +1481,17 @@ const handleDateClick = (date: Date | undefined) => {
                       variant="outline"
                       onClick={handleAnalyzeQualification}
                       disabled={qualificationLoading || meetings.length === 0}
-                      className="bg-white hover:bg-indigo-50 border-indigo-200"
+                      className="bg-white hover:bg-indigo-50 border-indigo-200 h-14"
                     >
                       {qualificationLoading ? (
                         <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                       ) : (
                         <Sparkles className="mr-2 h-3 w-3 text-indigo-500" />
                       )}
-                      Cualificar Prioridades del prospect (PACT)
+                      <div className="text-center">
+                        <p className="text-sm">Cualificar Prioridades del prospect (PACT)</p>
+                        <p className="text-xs italic text-slate-500">(en base a las reuniones mantenidas)</p>
+                    </div>
                     </Button>
                   </div>
                 ) : (
@@ -2115,6 +2265,147 @@ const handleDateClick = (date: Date | undefined) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={potentialPriorityDialog} onOpenChange={setPotentialPriorityDialog}>
+  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <Sparkles className="h-5 w-5 text-indigo-500" />
+        Prioridades Potenciales Identificadas
+      </DialogTitle>
+    </DialogHeader>
+    
+    {potentialPriorities.length === 0 ? (
+      <div className="text-center py-6">
+        <p className="text-sm text-slate-500">
+          No se identificaron prioridades potenciales
+        </p>
+      </div>
+    ) : (
+      <div className="space-y-3">
+        {potentialPriorities.map((priority, index) => (
+          <div
+            key={index}
+            className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer"
+            onClick={() => {
+              setSelectedPotentialPriority(priority);
+              setPotentialPriorityDetailDialog(true);
+            }}
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <h4 className="text-base font-semibold text-slate-800">
+                {priority.priority_title}
+              </h4>
+              <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+            </div>
+            <p className="text-sm text-slate-600 mb-2">
+              {priority.priority_challenge}
+            </p>
+            <p className="text-xs text-slate-500 italic">
+              {priority.justification}
+            </p>
+          </div>
+        ))}
+      </div>
+    )}
+    
+    <DialogFooter>
+      <Button onClick={() => setPotentialPriorityDialog(false)}>
+        Cerrar
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+<Dialog open={potentialPriorityDetailDialog} onOpenChange={setPotentialPriorityDetailDialog}>
+  <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle className="text-xl font-bold text-slate-800">
+        {selectedPotentialPriority?.priority_title}
+      </DialogTitle>
+    </DialogHeader>
+
+    {selectedPotentialPriority && (
+      <div className="space-y-4">
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">Reto Principal</h3>
+          <p className="text-sm text-slate-700">
+            {selectedPotentialPriority.priority_challenge}
+          </p>
+        </div>
+
+        <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">Justificación</h3>
+          <p className="text-sm text-slate-700 leading-relaxed">
+            {selectedPotentialPriority.justification}
+          </p>
+        </div>
+
+        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+          <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-purple-600" />
+            Valor que Gartner Puede Aportar
+          </h3>
+          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+            {selectedPotentialPriority.priority_gartner_value}
+          </p>
+        </div>
+
+        {selectedPotentialPriority.suggested_initiatives && selectedPotentialPriority.suggested_initiatives.length > 0 && (
+          <div className="border-t border-slate-200 pt-4">
+            <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-indigo-600" />
+              Iniciativas Sugeridas ({selectedPotentialPriority.suggested_initiatives.length})
+            </h3>
+            <div className="space-y-3">
+              {selectedPotentialPriority.suggested_initiatives.map((initiative: any, index: number) => (
+                <div key={index} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <h4 className="text-sm font-semibold text-slate-800 mb-1">
+                    {initiative.initiative_title}
+                  </h4>
+                  <p className="text-sm text-slate-600">
+                    {initiative.initiative_description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => {
+          let content = `PRIORIDAD POTENCIAL: ${selectedPotentialPriority?.priority_title}\n\n`;
+          content += `RETO PRINCIPAL:\n${selectedPotentialPriority?.priority_challenge}\n\n`;
+          content += `JUSTIFICACIÓN:\n${selectedPotentialPriority?.justification}\n\n`;
+          content += `VALOR GARTNER:\n${selectedPotentialPriority?.priority_gartner_value}\n\n`;
+          
+          if (selectedPotentialPriority?.suggested_initiatives && selectedPotentialPriority.suggested_initiatives.length > 0) {
+            content += `INICIATIVAS SUGERIDAS:\n`;
+            selectedPotentialPriority.suggested_initiatives.forEach((init: any, idx: number) => {
+              content += `\n${idx + 1}. ${init.initiative_title}\n`;
+              content += `   ${init.initiative_description}\n`;
+            });
+          }
+
+          navigator.clipboard.writeText(content.trim());
+          toast({
+            title: 'Copiado',
+            description: 'Prioridad potencial copiada al portapapeles',
+          });
+        }}
+      >
+        <Copy className="mr-2 h-4 w-4" />
+        Copiar
+      </Button>
+      <Button onClick={() => setPotentialPriorityDetailDialog(false)}>
+        Cerrar
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
       {showFollowUpLoader && (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center gap-4">
@@ -2127,6 +2418,7 @@ const handleDateClick = (date: Date | undefined) => {
           </p>
         </div>
       </div>
+      
 )}
     </div>
   );
