@@ -36,13 +36,13 @@ if %ERRORLEVEL% neq 0 (
         echo Creando script de reinicio...
         
         set "VBS_SCRIPT=%TEMP%\restart-installer.vbs"
-        set "BATCH_PATH=%~f0"
-        set "BATCH_DIR=%CD%"
         
-        echo Set WshShell = CreateObject("WScript.Shell") > "!VBS_SCRIPT!"
-        echo WScript.Sleep 1500 >> "!VBS_SCRIPT!"
-        echo WshShell.CurrentDirectory = "!BATCH_DIR!" >> "!VBS_SCRIPT!"
-        echo WshShell.Run "cmd.exe /c INSTALAR.bat --restart", 1, False >> "!VBS_SCRIPT!"
+        (
+        echo Set WshShell = CreateObject^("WScript.Shell"^)
+        echo WScript.Sleep 1500
+        echo WshShell.CurrentDirectory = "%CD%"
+        echo WshShell.Run "cmd.exe /c INSTALAR.bat --restart", 1, False
+        ) > "!VBS_SCRIPT!"
         
         echo Script creado en: !VBS_SCRIPT!
         echo.
