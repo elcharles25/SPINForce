@@ -629,35 +629,58 @@ pause
   }
 }
 
-function copyShortcutToDesktop() {
-  console.log('\n🔗 Copiando acceso directo al escritorio...');
+function createShortcutToDesktop() {
+  console.log('\n🔗 Creando acceso directo en el escritorio...');
   
   try {
-    const shortcutSource = path.join(appDir, 'SPIMforce.lnk');
-    
-    if (!fs.existsSync(shortcutSource)) {
-      console.log('   ⚠️  No se encontró el acceso directo SPIMforce.lnk en:', shortcutSource);
-      console.log('   ℹ️  Omitiendo copia al escritorio');
-      return false;
-    }
-    
     const desktopPath = path.join(os.homedir(), 'Desktop');
-    const shortcutDest = path.join(desktopPath, 'SPIMforce.lnk');
     
     if (!fs.existsSync(desktopPath)) {
-      console.log('   ⚠️  No se encontró la carpeta del escritorio en:', desktopPath);
-      console.log('   ℹ️  Omitiendo copia al escritorio');
+      console.log('   ⚠️  No se encontró la carpeta del escritorio');
+      console.log('   ℹ️  Omitiendo creación del acceso directo');
       return false;
     }
     
-    fs.copyFileSync(shortcutSource, shortcutDest);
-    console.log('   ✅ Acceso directo copiado al escritorio');
-    console.log('   📍', shortcutDest);
+    const targetBat = path.join(appDir, 'start-hidden.bat');
+    const iconPath = path.join(appDir, 'public', 'favicon.ico');
+    const shortcutPath = path.join(desktopPath, 'SPIMForce.lnk');
+    
+    // Verificar que existe el archivo objetivo
+    if (!fs.existsSync(targetBat)) {
+      console.log('   ⚠️  No se encontró start-hidden.bat');
+      console.log('   ℹ️  Omitiendo creación del acceso directo');
+      return false;
+    }
+    
+    // Verificar que existe el icono
+    if (!fs.existsSync(iconPath)) {
+      console.log('   ⚠️  No se encontró el icono en:', iconPath);
+      console.log('   ℹ️  El acceso directo se creará sin icono personalizado');
+    }
+    
+    // Crear el acceso directo usando PowerShell
+    const psScript = `
+$WshShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WshShell.CreateShortcut("${shortcutPath.replace(/\\/g, '\\\\')}")
+$Shortcut.TargetPath = "${targetBat.replace(/\\/g, '\\\\')}"
+$Shortcut.WorkingDirectory = "${appDir.replace(/\\/g, '\\\\')}"
+$Shortcut.Description = "SPIMForce CRM - Sistema de Gestión de Campañas"
+${fs.existsSync(iconPath) ? `$Shortcut.IconLocation = "${iconPath.replace(/\\/g, '\\\\')}"` : ''}
+$Shortcut.Save()
+`;
+    
+    // Ejecutar el script de PowerShell
+    execSync(`powershell -Command "${psScript.replace(/"/g, '\\"').replace(/\n/g, '; ')}"`, {
+      encoding: 'utf8'
+    });
+    
+    console.log('   ✅ Acceso directo creado en el escritorio');
+    console.log('   📍', shortcutPath);
     return true;
     
   } catch (error) {
-    console.log('   ⚠️  Error copiando acceso directo:', error.message);
-    console.log('   ℹ️  Puede copiar manualmente SPIMforce.lnk desde la carpeta spimforce al escritorio');
+    console.log('   ⚠️  Error creando acceso directo:', error.message);
+    console.log('   ℹ️  Puede crear el acceso directo manualmente');
     return false;
   }
 }
@@ -669,7 +692,13 @@ function createReadme() {
 
 ## Inicio de la Aplicación
 
-### Opción 1: Ventana Única (Recomendado)
+### Opción 1: Acceso Directo del Escritorio (Recomendado)
+Haga doble clic en el acceso directo **SPIMForce** en su escritorio.
+- Los servicios se inician automáticamente en segundo plano
+- No hay ventanas visibles
+- La aplicación se abre automáticamente en el navegador
+
+### Opción 2: Ventana Única
 Ejecute \`start.bat\` para iniciar todos los servicios en una sola ventana:
 \`\`\`
 start.bat
@@ -678,7 +707,7 @@ start.bat
 - Puede ver los logs en tiempo real
 - Para detener: Presione Ctrl+C o cierre la ventana
 
-### Opción 2: Ejecución Oculta (Sin Ventanas)
+### Opción 3: Ejecución Oculta
 Ejecute \`start-hidden.bat\` para iniciar sin ventanas visibles:
 \`\`\`
 start-hidden.bat
@@ -688,7 +717,7 @@ start-hidden.bat
 - Los logs se guardan en \`runtime/logs/\`
 - Para detener: Ejecute \`stop.bat\`
 
-### Opción 3: Manual (Desarrollo)
+### Opción 4: Manual (Desarrollo)
 Si prefiere iniciar los servicios manualmente en terminales separadas:
 
 1. Servidor de base de datos:
@@ -715,20 +744,20 @@ http://localhost:8080
 
 ## Detener la Aplicación
 
+### Si usó el acceso directo o start-hidden.bat
+Ejecute el archivo \`stop.bat\` en la carpeta de instalación:
+\`\`\`
+stop.bat
+\`\`\`
+
 ### Si usó start.bat (Ventana Única)
 - Presione \`Ctrl+C\` en la ventana
 - O simplemente cierre la ventana
 - O ejecute \`stop.bat\`
 
-### Si usó start-hidden.bat (Ejecución Oculta)
-Ejecute el archivo \`stop.bat\`:
-\`\`\`
-stop.bat
-\`\`\`
-
 ## Logs de la Aplicación
 
-Si ejecutó con \`start-hidden.bat\`, los logs están en:
+Si ejecutó con el acceso directo o \`start-hidden.bat\`, los logs están en:
 \`\`\`
 runtime/logs/
 ├── db-server.log      # Logs del servidor de base de datos
@@ -779,7 +808,7 @@ spimforce/
 ### La aplicación no inicia
 1. Verifique que Node.js está instalado: \`node --version\`
 2. Asegúrese de que los puertos 3001, 3002 y 8080 están disponibles
-3. Revise los logs en \`runtime/logs/\` (si usó start-hidden.bat)
+3. Revise los logs en \`runtime/logs/\`
 4. Ejecute \`stop.bat\` y vuelva a intentar
 
 ### Error de API Key
@@ -826,7 +855,7 @@ async function main() {
     createStartupScripts();
     createReadme();
     
-    const shortcutCopied = copyShortcutToDesktop();
+    const shortcutCreated = createShortcutToDesktop();
     
     console.log('\n╔════════════════════════════════════════════════════════════╗');
     console.log('║                                                            ║');
@@ -839,12 +868,12 @@ async function main() {
     console.log('   1. Asegurese de que MS Outlook está iniciado');
     console.log('');
     
-    if (shortcutCopied) {
+    if (shortcutCreated) {
       console.log('   2. Vaya al escritorio y ejecute el acceso directo:');
       console.log('      SPIMForce');
     } else {
       console.log('   2. Para iniciar la aplicación, ejecute:');
-      console.log('      ' + path.join(appDir, 'start.bat'));
+      console.log('      ' + path.join(appDir, 'start-hidden.bat'));
     }
     
     console.log('');
