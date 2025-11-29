@@ -247,7 +247,7 @@ const fetchOpportunities = async () => {
             const lastMeetingDate = parseFlexibleDate(lastMeetingDateStr);
             lastMeetingDate.setHours(0, 0, 0, 0);
             
-            if (lastMeetingDate.getTime() < oneMonthAgo.getTime() && 
+            if (lastMeetingDate.getTime() <= oneMonthAgo.getTime() && 
                 opp.status !== 'Cerrada ganada' && 
                 opp.status !== 'Cerrada perdida') {
               staleIds.add(opp.id);
