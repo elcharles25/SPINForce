@@ -267,7 +267,7 @@ const Dashboard = () => {
       const campaignsInactive = (repliedCount + completedCount);
       const campaignsInactActive = (campaignsInactive + activeCount);
       const replyRate = campaigns.length > 0 ? (repliedCount / campaignsInactActive) * 100 : 0;
-      const averageEmailsPerCampaign = campaigns.length > 0 ? totalEmailsSent / campaigns.length : 0;
+      const averageEmailsPerCampaign = campaigns.length > 0 ? totalEmailsSent / campaignsInactActive : 0;
 
       const templateMap: Record<string, { total: number; replied: number; name: string }> = {};
 
