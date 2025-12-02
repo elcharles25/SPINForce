@@ -566,7 +566,7 @@ const loadMeetings = async () => {
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom' ];
 
     for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(<div key={`empty-${i}`} className="h-20 border border-gray-100"></div>);
+      days.push(<div key={`empty-${i}`} className="h-16 border border-gray-100"></div>);
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -579,25 +579,25 @@ const loadMeetings = async () => {
         <div
           key={day}
           onClick={() => handleDayClick(day)}
-          className={`h-20 border border-gray-100 p-1 ${
+          className={`h-16 border border-gray-100 p-1 ${
             dayMeetings.length > 0 ? 'cursor-pointer hover:bg-gray-50' : ''
           } ${isToday ? 'bg-indigo-50' : ''}`}
         >
           <div className={`text-sm font-medium ${isToday ? 'text-indigo-600' : 'text-gray-700'}`}>
             {day}
           </div>
-          <div className="mt-1 space-y-1">
+          <div className="mt-0.5 space-y-0.5">
             {dayMeetings.slice(0, 2).map((meeting, idx) => (
               <div
                 key={idx}
-                className={`text-xs px-1 py-0.5 rounded text-white truncate ${getMeetingColor(meeting.meeting_type)}`}
+                className={`text-xs px-0.5 py-0 rounded text-white truncate ${getMeetingColor(meeting.meeting_type)}`}
                 title={`${meeting.meeting_type} - ${meeting.organization}`}
               >
                 {meeting.meeting_type}
               </div>
             ))}
             {dayMeetings.length > 2 && (
-              <div className="text-xs text-gray-500 px-1">
+              <div className="text-xs text-gray-500 px-0.5">
                 +{dayMeetings.length - 2} más
               </div>
             )}
@@ -821,8 +821,8 @@ if (metrics.contacts.total === 0 && metrics.accounts.total === 0) {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <Card className="lg:col-span-7">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 Rendimiento de Campañas
@@ -948,7 +948,7 @@ if (metrics.contacts.total === 0 && metrics.accounts.total === 0) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="lg:col-span-5">
             <CardHeader className="flex flex-col gap-3 pb-2">
               <CardTitle className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
