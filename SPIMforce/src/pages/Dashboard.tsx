@@ -1282,7 +1282,9 @@ if (metrics.contacts.total === 0 && metrics.accounts.total === 0) {
                 <div
                   key={index}
                   className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/crm/${meeting.contactId}`)}
+                  onClick={() => navigate(`/crm/${meeting.contactId}`, {
+                    state: { from: 'dashboard' }}
+                  )}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">

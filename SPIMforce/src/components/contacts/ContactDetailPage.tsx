@@ -302,6 +302,7 @@ const [formData, setFormData] = useState({
 
     const location = useLocation();
     const fromAccount = location.state?.from === 'account';
+    const fromDashboard = location.state?.from === 'dashboard';
     const accountId = location.state?.accountId;
     const [valueAnalysisDialog, setValueAnalysisDialog] = useState(false);
     const [selectedValueInitiative, setSelectedValueInitiative] = useState<any>(null);
@@ -1112,11 +1113,17 @@ const handleShowMore = () => {
     <div className="container mx-auto py-6 px-4">
       <Button
         variant="ghost"
-        onClick={() => navigate(fromAccount ? `/accounts/${accountId}` : '/crm')}
+        onClick={() => navigate(
+          fromAccount ? `/accounts/${accountId}` : 
+          fromDashboard ? '/' : 
+          '/crm'
+        )}
         className="mb-4"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
-        {fromAccount ? 'Volver a la cuenta' : 'Volver a Contactos'}
+        {fromAccount ? 'Volver a la cuenta' : 
+        fromDashboard ? 'Volver a Dashboard' : 
+        'Volver a Contactos'}
       </Button>
 
       {/* HEADER CON FOTO Y DATOS DEL CONTACTO */}
