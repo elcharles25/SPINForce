@@ -642,7 +642,7 @@ function createShortcutToDesktop() {
     }
     
     const targetBat = path.join(appDir, 'start-hidden.bat');
-    const iconPath = path.join(appDir, 'public', 'favicon.ico');
+    const iconPath = path.join(appDir, 'public', 'favicon_shell.ico');
     const shortcutPath = path.join(desktopPath, 'SPIMForce.lnk');
     
     // Verificar que existe el archivo objetivo

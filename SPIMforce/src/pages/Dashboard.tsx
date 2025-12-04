@@ -220,7 +220,7 @@ const loadMeetings = async () => {
               organization: opp.contact.organization,
               contactName: `${opp.contact.first_name} ${opp.contact.last_name}`,
               opportunityId: opp.id,
-              contactId: opp.contact.id,
+              contactId: meeting.contact_id,
             });
           }
         });
@@ -244,7 +244,7 @@ const loadMeetings = async () => {
         organization: meeting.contact?.organization || 'Sin organización',
         contactName: meeting.contact ? `${meeting.contact.first_name} ${meeting.contact.last_name}` : 'Sin contacto',
         opportunityId: '',
-        contactId: meeting.contact.id,
+        contactId: meeting.contact_id,
       });
     }
   });
