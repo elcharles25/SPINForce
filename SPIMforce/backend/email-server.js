@@ -2847,41 +2847,186 @@ try {
 
 /**
  * Verifica si un contacto está en la lista de asistentes de una reunión
+ * VERSIÓN MÁS ESTRICTA - Evita falsos positivos
  */
 const isContactInMeeting = (meeting, contactEmail, contactFirstName = '', contactLastName = '') => {
   if (!meeting.Attendees || meeting.Attendees.length === 0) return false;
+  if (!contactEmail) return false;
   
   const normalizedContactEmail = contactEmail.toLowerCase().trim();
   const contactUsername = normalizedContactEmail.split('@')[0];
+  const contactDomain = normalizedContactEmail.split('@')[1];
+  
+  // Normalizar nombre y apellido
+  const normalizedFirstName = normalizeText(contactFirstName);
+  const normalizedLastName = normalizeText(contactLastName);
   
   for (const attendee of meeting.Attendees) {
     const attendeeEmail = (attendee.Email || '').toLowerCase().trim();
+    const attendeeName = normalizeText(attendee.Name || '');
     
-    // Match exacto por email
-    if (attendeeEmail === normalizedContactEmail) {
-      return true;
+    // ========== SOLO EMAILS SMTP VÁLIDOS ==========
+    if (!attendeeEmail.includes('@') && !attendeeEmail.startsWith('name:')) {
+      // Email inválido, skip
+      continue;
     }
     
-    // Match por username
+    // ========== CASO 1: EMAIL SMTP VÁLIDO (tiene @) ==========
     if (attendeeEmail.includes('@')) {
-      const attendeeUsername = attendeeEmail.split('@')[0];
-      if (contactUsername.length > 3 && attendeeUsername.includes(contactUsername)) {
+      // MÉTODO 1A: Coincidencia EXACTA de email
+      if (attendeeEmail === normalizedContactEmail) {
         return true;
       }
+      
+      // MÉTODO 1B: Coincidencia por dominio y username
+      const attendeeUsername = attendeeEmail.split('@')[0];
+      const attendeeDomain = attendeeEmail.split('@')[1];
+      
+      // Username y dominio coinciden exactamente
+      if (contactDomain === attendeeDomain && contactUsername === attendeeUsername) {
+        return true;
+      }
+      
+      // Username similar (eliminar puntos, guiones)
+      if (contactDomain === attendeeDomain && 
+          contactUsername.length > 3 && 
+          attendeeUsername.length > 3) {
+        
+        const cleanContactUsername = contactUsername.replace(/[.\-_]/g, '');
+        const cleanAttendeeUsername = attendeeUsername.replace(/[.\-_]/g, '');
+        
+        if (cleanContactUsername === cleanAttendeeUsername) {
+          return true;
+        }
+      }
+      
+      // No hacer más verificaciones por nombre si el email no coincide
+      continue;
     }
     
-    // Match por nombre en formato "NAME:..."
+    // ========== CASO 2: EMAIL FORMATO "NAME:..." (sin SMTP) ==========
     if (attendeeEmail.startsWith('name:')) {
-      const attendeeName = normalizeText(attendee.Name || '');
-      const fullContactName = normalizeText(`${contactFirstName} ${contactLastName}`);
+      // Extraer el nombre del formato "NAME:nilley.gomez"
+      const nameInEmail = attendeeEmail.substring(5).toLowerCase().trim();
       
-      if (attendeeName && fullContactName && attendeeName.includes(fullContactName.split(' ')[0])) {
+      // ⚠️ SKIP si no tenemos nombre Y apellido del contacto
+      if (!normalizedFirstName || !normalizedLastName) {
+        continue;
+      }
+      
+      // Separar el nameInEmail en palabras (por punto, guión, espacio, etc.)
+      const nameWords = nameInEmail.split(/[.\-_\s]+/).filter(w => w.length > 1);
+      
+      // ⚠️ SKIP si nameInEmail tiene menos de 2 palabras
+      if (nameWords.length < 2) {
+        continue;
+      }
+      
+      // Separar nombre y apellido del contacto en palabras
+      const firstNameWords = normalizedFirstName.split(/\s+/).filter(w => w.length > 1);
+      const lastNameWords = normalizedLastName.split(/\s+/).filter(w => w.length > 1);
+      
+      // ⚠️ REGLA CRÍTICA: Debe haber coincidencia exacta de palabras
+      // No vale que "gomez" esté en nameWords - debe ser EXACTAMENTE las palabras del contacto
+      
+      // Verificar si nameWords contiene EXACTAMENTE las palabras del nombre
+      let firstNameMatchCount = 0;
+      for (const word of firstNameWords) {
+        if (nameWords.includes(word)) {
+          firstNameMatchCount++;
+        }
+      }
+      
+      // Verificar si nameWords contiene EXACTAMENTE las palabras del apellido
+      let lastNameMatchCount = 0;
+      for (const word of lastNameWords) {
+        if (nameWords.includes(word)) {
+          lastNameMatchCount++;
+        }
+      }
+      
+      // ⚠️ MATCH SOLO SI:
+      // - Todas las palabras del nombre están presentes (firstNameMatchCount === firstNameWords.length)
+      // - Todas las palabras del apellido están presentes (lastNameMatchCount === lastNameWords.length)
+      // - El total de palabras en nameWords coincide (no hay palabras extra)
+      
+      const totalContactWords = firstNameWords.length + lastNameWords.length;
+      const totalMatchedWords = firstNameMatchCount + lastNameMatchCount;
+      
+      if (totalMatchedWords === totalContactWords && 
+          totalContactWords === nameWords.length &&
+          firstNameMatchCount === firstNameWords.length &&
+          lastNameMatchCount === lastNameWords.length) {
         return true;
       }
+      
+      // ⚠️ NO hacer match parcial
+      continue;
     }
   }
   
   return false;
+};
+
+/**
+ * Determina el tipo de reunión basado en el subject
+ * Retorna uno de los tipos permitidos o 'Otros'
+ */
+/**
+ * Determina el tipo de reunión basado en el subject
+ * Retorna uno de los tipos permitidos o 'Otros'
+ */
+const determineMeetingType = (subject) => {
+  if (!subject) return 'Otros';
+  
+  const normalizedSubject = subject.toLowerCase().trim();
+  
+  // Orden de prioridad para coincidencias (más específico primero)
+  const typePatterns = [
+    // QBR variants (más específicos primero)
+    { pattern: /\bqbr\s*aa90\b/i, type: 'QBR AA90' },
+    { pattern: /\bqbr\s*midyear\b/i, type: 'QBR MIDYEAR' },
+    { pattern: /\bqbr\s*90\b/i, type: 'QBR 90' },
+    { pattern: /\bqbr\b/i, type: 'QBR 90' },
+    { pattern: /\bseguimiento\b/i, type: 'QBR 90' },
+    
+    // SKO
+    { pattern: /\bsko\b/i, type: 'SKO' },
+    
+    // Qualification
+    { pattern: /\bpresentaci[oó]n\b/i, type: 'Qualification' },
+    { pattern: /\bconocernos\b/i, type: 'Qualification' },
+    { pattern: /\bconocer\b/i, type: 'Qualification' },
+    { pattern: /\bprioridades\b/i, type: 'Qualification' },
+    { pattern: /\bretos\b/i, type: 'Qualification' },
+    
+    // Cap. Alignment
+    { pattern: /\bcap\.\s*alignment\b/i, type: 'Cap. Alignment' },
+    { pattern: /\bcapacidades\b/i, type: 'Cap. Alignment' },
+    
+    // IPW
+    { pattern: /\bipw\b/i, type: 'IPW' },
+    
+    // POC (EP POC debe ir antes de POC)
+    { pattern: /\bep\s*poc\b/i, type: 'EP POC' },
+    { pattern: /\bpoc\b/i, type: 'POC' },
+    
+    // Proposal
+    { pattern: /\bproposal\b/i, type: 'Proposal' },
+    { pattern: /\bpropuesta\b/i, type: 'Proposal' },
+    
+    // Delivery
+    { pattern: /\bdelivery\b/i, type: 'Delivery' },
+  ];
+  
+  // Buscar primera coincidencia
+  for (const { pattern, type } of typePatterns) {
+    if (pattern.test(normalizedSubject)) {
+      return type;
+    }
+  }
+  
+  return 'Otros';
 };
 
 /**
@@ -2927,18 +3072,15 @@ app.post('/api/contacts/import-calendar-meetings', async (req, res) => {
 
     console.log(`📅 Importando reuniones del calendario para ${contactEmail}...`);
 
-    // Obtener datos del contacto
     const contactResponse = await fetch(`http://localhost:3001/api/contacts/${contactId}`);
     const contactData = await contactResponse.json();
     
     const firstName = contactData.first_name || '';
     const lastName = contactData.last_name || '';
 
-    // Leer calendario
     const calendarMeetings = await readOutlookCalendar(daysBack, daysForward);
     console.log(`📆 Total reuniones en calendario: ${calendarMeetings.length}`);
 
-    // Filtrar reuniones donde está el contacto
     const contactMeetings = calendarMeetings.filter(meeting => 
       isContactInMeeting(meeting, contactEmail, firstName, lastName)
     );
@@ -2954,7 +3096,6 @@ app.post('/api/contacts/import-calendar-meetings', async (req, res) => {
       });
     }
 
-    // Obtener meetings existentes
     const existingMeetingsResponse = await fetch(`http://localhost:3001/api/meetings/contact/${contactId}`);
     const existingMeetings = await existingMeetingsResponse.json();
     
@@ -2965,39 +3106,24 @@ app.post('/api/contacts/import-calendar-meetings', async (req, res) => {
     let errorCount = 0;
     const results = [];
 
-    // Tipos de reunión permitidos
-    const allowedTypes = ['SKO', 'QBR 90', 'QBR MIDYEAR', 'QBR AA90', 'Qualification', 'Cap. Alignment', 'IPW', 'POC', 'EP POC', 'Proposal', 'Delivery', 'Otros'];
-
     for (const meeting of contactMeetings) {
       try {
-        const meetingDate = meeting.Start.split(' ')[0];
+        const meetingDate = meeting.Start.split(' ')[0]; // YYYY-MM-DD
         const meetingTime = meeting.Start.split(' ')[1] || '00:00:00';
         const normalizedSubject = meeting.Subject.trim().toLowerCase();
+        const meetingType = determineMeetingType(meeting.Subject);
         
-        // Determinar el tipo de reunión basado en el subject
-        let meetingType = 'Otros';
-        for (const type of allowedTypes) {
-          if (normalizedSubject.toLowerCase().includes(type.toLowerCase())) {
-            meetingType = type;
-            break;
-          }
-        }
+        // ⭐ NORMALIZAR FECHA DE LA REUNIÓN DEL CACHÉ
+        const normalizedMeetingDate = normalizeDateForComparison(meetingDate);
         
-        // Verificar si ya existe
         const isDuplicate = existingMeetings.some(existingMeeting => {
-          let existingDate = existingMeeting.meeting_date;
+          // ⭐ NORMALIZAR FECHA DE LA BD
+          const normalizedExistingDate = normalizeDateForComparison(existingMeeting.meeting_date);
           
-          // Normalizar fecha existente
-          if (existingDate.includes('/')) {
-            const [day, monthYear] = existingDate.split('/');
-            const [month, yearTime] = monthYear.split('/');
-            const year = yearTime.split(' ')[0];
-            existingDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-          } else if (existingDate.includes(' ')) {
-            existingDate = existingDate.split(' ')[0];
+          // Comparar fechas normalizadas
+          if (normalizedExistingDate !== normalizedMeetingDate) {
+            return false;
           }
-          
-          if (existingDate !== meetingDate) return false;
           
           // Comparar subject
           const existingSubject = (existingMeeting.notes || '').split('\n')[0].trim().toLowerCase();
@@ -3017,7 +3143,6 @@ app.post('/api/contacts/import-calendar-meetings', async (req, res) => {
           continue;
         }
 
-        // Preparar notas
         const notes = `${meeting.Subject}
 
 Fecha: ${meeting.Start}
@@ -3026,7 +3151,6 @@ Ubicación: ${meeting.Location || 'No especificada'}
 
 ${meeting.Body ? meeting.Body : ''}`.trim();
 
-        // Crear meeting
         const meetingData = {
           contact_id: contactId,
           opportunity_id: null,
@@ -3377,13 +3501,52 @@ const initializeCalendarCacheOnStartup = async () => {
 };
 
 /**
+ * Normaliza una fecha a formato YYYY-MM-DD para comparaciones
+ * Acepta formatos: DD/MM/YYYY, YYYY-MM-DD, DD/MM/YYYY HH:MM, YYYY-MM-DD HH:MM
+ */
+const normalizeDateForComparison = (dateString) => {
+  if (!dateString) return null;
+  
+  try {
+    // Quitar la hora si existe, solo nos interesa la fecha
+    const datePart = dateString.split(' ')[0].trim();
+    
+    // Caso 1: Formato DD/MM/YYYY (español)
+    if (datePart.includes('/')) {
+      const parts = datePart.split('/');
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        return `${year}-${month}-${day}`;
+      }
+    }
+    
+    // Caso 2: Formato YYYY-MM-DD (americano/ISO)
+    if (datePart.includes('-')) {
+      const parts = datePart.split('-');
+      if (parts.length === 3) {
+        const year = parts[0];
+        const month = parts[1].padStart(2, '0');
+        const day = parts[2].padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error normalizando fecha:', dateString, error);
+    return null;
+  }
+};
+
+/**
  * Sincroniza todas las reuniones de la caché con la base de datos
  */
 const syncAllMeetingsToDatabase = async () => {
   try {
     console.log('\n📊 === SINCRONIZANDO REUNIONES CON BASE DE DATOS ===');
     
-    // Calcular rango: 365 días atrás + 180 días adelante
     const today = new Date();
     const pastDate = new Date(today);
     pastDate.setDate(pastDate.getDate() - 365);
@@ -3395,7 +3558,6 @@ const syncAllMeetingsToDatabase = async () => {
     
     console.log(`📅 Rango: ${startDateStr} → ${endDateStr}`);
     
-    // Leer reuniones desde caché
     const meetings = await readFromCacheCalendar(startDateStr, endDateStr);
     console.log(`📧 Total reuniones en caché: ${meetings.length}`);
     
@@ -3404,75 +3566,63 @@ const syncAllMeetingsToDatabase = async () => {
       return { success: true, syncedCount: 0, skippedCount: 0 };
     }
     
-    // Obtener todos los contactos de la BD
     const contactsResponse = await fetch('http://localhost:3001/api/contacts');
     const contacts = await contactsResponse.json();
     console.log(`👥 Contactos en BD: ${contacts.length}`);
     
     let syncedCount = 0;
-    let skippedCount = 0;
     let errorCount = 0;
-    
-    // Tipos de reunión permitidos
-    const allowedTypes = ['SKO', 'QBR 90', 'QBR MIDYEAR', 'QBR AA90', 'Qualification', 'Cap. Alignment', 'IPW', 'POC', 'EP POC', 'Proposal', 'Delivery', 'Otros'];
+    let noContactMatchCount = 0;
+    let duplicateCount = 0;
     
     for (const meeting of meetings) {
       try {
-        // Buscar contacto(s) que estén en esta reunión
         const matchedContacts = contacts.filter(contact =>
           isContactInMeeting(meeting, contact.email, contact.first_name, contact.last_name)
         );
         
         if (matchedContacts.length === 0) {
-          skippedCount++;
+          noContactMatchCount++;
           continue;
         }
         
-        // Para cada contacto encontrado, crear/actualizar meeting
         for (const contact of matchedContacts) {
           try {
-            const meetingDate = meeting.Start.split(' ')[0];
+            // Fecha de la reunión del caché (formato YYYY-MM-DD HH:MM:SS)
+            const meetingDate = meeting.Start.split(' ')[0]; // YYYY-MM-DD
             const meetingTime = meeting.Start.split(' ')[1] || '00:00:00';
+            const meetingType = determineMeetingType(meeting.Subject);
             
-            // Determinar tipo de reunión
-            let meetingType = 'Otros';
-            const normalizedSubject = meeting.Subject.trim().toLowerCase();
-            for (const type of allowedTypes) {
-              if (normalizedSubject.includes(type.toLowerCase())) {
-                meetingType = type;
-                break;
-              }
-            }
-            
-            // Verificar si ya existe
             const existingResponse = await fetch(`http://localhost:3001/api/meetings/contact/${contact.id}`);
             const existingMeetings = await existingResponse.json();
             
+            const normalizedSubject = meeting.Subject.trim().toLowerCase();
+            
+            // ⭐ NORMALIZAR FECHA DE LA REUNIÓN DEL CACHÉ
+            const normalizedMeetingDate = normalizeDateForComparison(meetingDate);
+            
             const isDuplicate = existingMeetings.some(existingMeeting => {
-              let existingDate = existingMeeting.meeting_date;
+              // ⭐ NORMALIZAR FECHA DE LA BD
+              const normalizedExistingDate = normalizeDateForComparison(existingMeeting.meeting_date);
               
-              if (existingDate.includes('/')) {
-                const parts = existingDate.split('/');
-                const day = parts[0].padStart(2, '0');
-                const month = parts[1].padStart(2, '0');
-                const year = parts[2].split(' ')[0];
-                existingDate = `${year}-${month}-${day}`;
-              } else if (existingDate.includes(' ')) {
-                existingDate = existingDate.split(' ')[0];
+              // Comparar fechas normalizadas
+              if (normalizedExistingDate !== normalizedMeetingDate) {
+                return false;
               }
               
-              if (existingDate !== meetingDate) return false;
-              
-              const existingSubject = (existingMeeting.notes || '').toLowerCase();
-              return existingSubject.includes(normalizedSubject) || normalizedSubject.includes(existingSubject);
+              // Comparar subject
+              const existingNotes = (existingMeeting.notes || '').toLowerCase();
+              const firstLine = existingNotes.split('\n')[0].trim();
+              return firstLine === normalizedSubject || 
+                     firstLine.includes(normalizedSubject) ||
+                     normalizedSubject.includes(firstLine);
             });
             
             if (isDuplicate) {
-              skippedCount++;
+              duplicateCount++;
               continue;
             }
             
-            // Preparar notas
             const notes = `${meeting.Subject}
 
 Fecha: ${meeting.Start}
@@ -3482,7 +3632,6 @@ Organizador: ${meeting.OrganizerName || 'Desconocido'}
 
 ${meeting.Body ? meeting.Body : ''}`.trim();
             
-            // Crear meeting
             const meetingData = {
               contact_id: contact.id,
               opportunity_id: null,
@@ -3515,23 +3664,25 @@ ${meeting.Body ? meeting.Body : ''}`.trim();
     }
     
     console.log(`\n📊 === RESUMEN DE SINCRONIZACIÓN ===`);
+    console.log(`   Total reuniones procesadas: ${meetings.length}`);
+    console.log(`   Sin contacto en BD: ${noContactMatchCount}`);
+    console.log(`   Duplicados detectados: ${duplicateCount}`);
     console.log(`   ✅ Sincronizadas: ${syncedCount}`);
-    console.log(`   ⏭️  Omitidas: ${skippedCount}`);
     console.log(`   ❌ Errores: ${errorCount}`);
     console.log(`=====================================\n`);
     
     return {
       success: true,
       syncedCount,
-      skippedCount,
-      errorCount
+      duplicateCount,
+      errorCount,
+      noContactMatchCount
     };
   } catch (error) {
     console.error('❌ Error sincronizando reuniones con BD:', error);
     throw error;
   }
 };
-
 /**
  * POST /api/calendar/create-cache
  * Crea un nuevo archivo de caché incremental de calendario
@@ -3603,6 +3754,266 @@ app.post('/api/calendar/sync-all-meetings', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/meetings/update-all-types
+ * Recalcula y actualiza el meeting_type de todas las reuniones basándose en sus subjects
+ */
+app.post('/api/meetings/update-all-types', async (req, res) => {
+  try {
+    console.log('\n🔄 === ACTUALIZANDO TIPOS DE REUNIONES ===');
+    
+    // Obtener todas las reuniones de todos los contactos
+    const contactsResponse = await fetch('http://localhost:3001/api/contacts');
+    const contacts = await contactsResponse.json();
+    
+    console.log(`👥 Contactos en BD: ${contacts.length}`);
+    
+    let totalMeetings = 0;
+    let updatedCount = 0;
+    let unchangedCount = 0;
+    let errorCount = 0;
+    
+    const typeChanges = {}; // Para estadísticas: "Otros -> QBR 90": 5
+    
+    for (const contact of contacts) {
+      try {
+        // Obtener meetings del contacto
+        const meetingsResponse = await fetch(`http://localhost:3001/api/meetings/contact/${contact.id}`);
+        const meetings = await meetingsResponse.json();
+        
+        if (!Array.isArray(meetings) || meetings.length === 0) {
+          continue;
+        }
+        
+        totalMeetings += meetings.length;
+        
+        for (const meeting of meetings) {
+          try {
+            // Extraer el subject de las notas (primera línea)
+            const notes = meeting.notes || '';
+            const firstLine = notes.split('\n')[0].trim();
+            
+            // Determinar el nuevo tipo basado en el subject
+            const newType = determineMeetingType(firstLine);
+            const oldType = meeting.meeting_type || 'Otros';
+            
+            // Solo actualizar si el tipo cambió
+            if (newType !== oldType) {
+              // ⭐ CORRECCIÓN: Normalizar la fecha antes de enviar
+              let meetingDate = meeting.meeting_date;
+              
+              // Si la fecha está en formato DD/MM/YYYY HH:MM → convertir a YYYY-MM-DD HH:MM
+              if (meetingDate && meetingDate.includes('/')) {
+                try {
+                  const parts = meetingDate.split(' ');
+                  const datePart = parts[0]; // DD/MM/YYYY
+                  const timePart = parts[1] || '00:00:00'; // HH:MM:SS
+                  
+                  const [day, month, year] = datePart.split('/');
+                  meetingDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${timePart}`;
+                } catch (dateError) {
+                  console.warn(`⚠️ Error parseando fecha "${meeting.meeting_date}":`, dateError.message);
+                  // Usar la fecha original si falla el parseo
+                }
+              }
+              
+              // Actualizar en BD
+              const updateResponse = await fetch(`http://localhost:3001/api/meetings/${meeting.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contact_id: meeting.contact_id,
+                  opportunity_id: meeting.opportunity_id || 'Sin oportunidad',
+                  meeting_type: newType,
+                  meeting_date: meetingDate,
+                  feeling: meeting.feeling || '',
+                  notes: meeting.notes || ''
+                })
+              });
+              
+              if (updateResponse.ok) {
+                updatedCount++;
+                
+                // Registrar cambio para estadísticas
+                const changeKey = `${oldType} → ${newType}`;
+                typeChanges[changeKey] = (typeChanges[changeKey] || 0) + 1;
+                
+                // Log de las primeras 10 actualizaciones
+                if (updatedCount <= 10) {
+                  console.log(`   ✅ "${firstLine.substring(0, 50)}..."`);
+                  console.log(`      ${oldType} → ${newType}`);
+                }
+              } else {
+                const errorText = await updateResponse.text();
+                console.error(`   ❌ Error HTTP ${updateResponse.status}: ${errorText}`);
+                errorCount++;
+              }
+            } else {
+              unchangedCount++;
+            }
+          } catch (meetingError) {
+            console.error(`⚠️ Error procesando meeting ${meeting.id}:`, meetingError.message);
+            errorCount++;
+          }
+        }
+      } catch (contactError) {
+        console.error(`⚠️ Error procesando contacto ${contact.id}:`, contactError.message);
+        errorCount++;
+      }
+    }
+    
+    console.log(`\n📊 === RESUMEN DE ACTUALIZACIÓN ===`);
+    console.log(`   Total reuniones revisadas: ${totalMeetings}`);
+    console.log(`   ✅ Actualizadas: ${updatedCount}`);
+    console.log(`   ⏭️  Sin cambios: ${unchangedCount}`);
+    console.log(`   ❌ Errores: ${errorCount}`);
+    
+    if (Object.keys(typeChanges).length > 0) {
+      console.log(`\n📈 Cambios de tipo realizados:`);
+      Object.entries(typeChanges)
+        .sort((a, b) => b[1] - a[1]) // Ordenar por cantidad
+        .forEach(([change, count]) => {
+          console.log(`   ${change}: ${count}`);
+        });
+    }
+    
+    console.log(`=====================================\n`);
+    
+    res.json({
+      success: true,
+      totalMeetings,
+      updatedCount,
+      unchangedCount,
+      errorCount,
+      typeChanges
+    });
+    
+  } catch (error) {
+    console.error('❌ Error actualizando tipos de reuniones:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+/**
+ * POST /api/meetings/fix-invalid-dates
+ * Corrige todas las fechas en formato DD/MM/YYYY a YYYY-MM-DD HH:MM:SS
+ */
+app.post('/api/meetings/fix-invalid-dates', async (req, res) => {
+  try {
+    console.log('\n🔧 === CORRIGIENDO FECHAS INVÁLIDAS ===');
+    
+    // Obtener todas las reuniones de todos los contactos
+    const contactsResponse = await fetch('http://localhost:3001/api/contacts');
+    const contacts = await contactsResponse.json();
+    
+    console.log(`👥 Contactos en BD: ${contacts.length}`);
+    
+    let totalMeetings = 0;
+    let fixedCount = 0;
+    let alreadyValidCount = 0;
+    let errorCount = 0;
+    
+    for (const contact of contacts) {
+      try {
+        const meetingsResponse = await fetch(`http://localhost:3001/api/meetings/contact/${contact.id}`);
+        const meetings = await meetingsResponse.json();
+        
+        if (!Array.isArray(meetings) || meetings.length === 0) {
+          continue;
+        }
+        
+        totalMeetings += meetings.length;
+        
+        for (const meeting of meetings) {
+          try {
+            const meetingDate = meeting.meeting_date;
+            
+            if (!meetingDate) {
+              console.warn(`⚠️ Meeting ${meeting.id} sin fecha`);
+              continue;
+            }
+            
+            // Verificar si la fecha está en formato DD/MM/YYYY
+            const datePart = meetingDate.split(' ')[0];
+            
+            // Si tiene "/" es formato español (DD/MM/YYYY)
+            if (datePart.includes('/')) {
+              const parts = meetingDate.split(' ');
+              const dateOnly = parts[0]; // DD/MM/YYYY
+              const timeOnly = parts[1] || '00:00:00'; // HH:MM:SS o HH:MM
+              
+              const [day, month, year] = dateOnly.split('/');
+              
+              // Convertir a formato YYYY-MM-DD HH:MM:SS
+              const fixedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${timeOnly}`;
+              
+              console.log(`🔧 Corrigiendo: ${meetingDate} → ${fixedDate}`);
+              
+              // Actualizar en BD
+              const updateResponse = await fetch(`http://localhost:3001/api/meetings/${meeting.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contact_id: meeting.contact_id,
+                  opportunity_id: meeting.opportunity_id || 'Sin oportunidad',
+                  meeting_type: meeting.meeting_type,
+                  meeting_date: fixedDate,
+                  feeling: meeting.feeling || '',
+                  notes: meeting.notes || ''
+                })
+              });
+              
+              if (updateResponse.ok) {
+                fixedCount++;
+                if (fixedCount <= 10) {
+                  console.log(`   ✅ Meeting ${meeting.id} corregido`);
+                }
+              } else {
+                const errorText = await updateResponse.text();
+                console.error(`   ❌ Error actualizando meeting ${meeting.id}: ${errorText}`);
+                errorCount++;
+              }
+            } else {
+              // Ya está en formato correcto (YYYY-MM-DD)
+              alreadyValidCount++;
+            }
+          } catch (meetingError) {
+            console.error(`⚠️ Error procesando meeting ${meeting.id}:`, meetingError.message);
+            errorCount++;
+          }
+        }
+      } catch (contactError) {
+        console.error(`⚠️ Error procesando contacto ${contact.id}:`, contactError.message);
+        errorCount++;
+      }
+    }
+    
+    console.log(`\n📊 === RESUMEN DE CORRECCIÓN ===`);
+    console.log(`   Total reuniones revisadas: ${totalMeetings}`);
+    console.log(`   ✅ Fechas corregidas: ${fixedCount}`);
+    console.log(`   ✓ Ya válidas: ${alreadyValidCount}`);
+    console.log(`   ❌ Errores: ${errorCount}`);
+    console.log(`=====================================\n`);
+    
+    res.json({
+      success: true,
+      totalMeetings,
+      fixedCount,
+      alreadyValidCount,
+      errorCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Error corrigiendo fechas:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+
 app.listen(PORT, async () => {
   console.log(`\n✅ Servidor de email ejecutándose en http://localhost:${PORT}`);
   console.log('\nEndpoints disponibles:');
@@ -3612,7 +4023,9 @@ app.listen(PORT, async () => {
   console.log('  POST /api/campaigns/check-all-replies - Revisar respuestas');
   console.log('  GET /api/outlook/calendar - Leer calendario');
   console.log('  POST /api/contacts/import-calendar-meetings - Importar reuniones de un contacto');
-  console.log('  POST /api/calendar/sync-all-meetings - Sincronizar reuniones con BD\n');
+  console.log('  POST /api/calendar/sync-all-meetings - Sincronizar reuniones con BD');
+  console.log('  POST /api/meetings/update-all-types - Actualizar tipos de todas las reuniones');
+  console.log('  POST /api/meetings/fix-invalid-dates - Corregir fechas inválidas\n');
 
   // ⭐ INICIALIZAR CACHÉ DE EMAILS EN BACKGROUND
   await initializeCacheOnStartup();

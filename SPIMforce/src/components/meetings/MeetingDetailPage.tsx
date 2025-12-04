@@ -4,7 +4,7 @@ import { db } from '@/lib/db-adapter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatDateES } from '@/utils/dateFormatter';
+import { formatDateES, formatDateTime} from '@/utils/dateFormatter';
 import { Mail, Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -95,6 +95,23 @@ export default function MeetingDetailPage() {
     }
   };
 
+
+const formatDateOnly = (dateString: string): string => {
+  if (!dateString) return '';
+  
+  // Si la fecha ya está en formato DD/MM/YYYY, solo cambiar / por -
+  if (dateString.includes('/') && dateString.split('/').length === 3) {
+    return dateString.split(' ')[0].replace(/\//g, '-');
+  }
+  
+  // Si está en formato ISO
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
   const getBackButtonText = () => {
     if (from === 'opportunity') {
       return 'Volver a Oportunidad';
@@ -161,18 +178,23 @@ export default function MeetingDetailPage() {
     return option?.label || feeling;
   };
 
-  const openEditDialog = () => {
-    if (!meeting) return;
-    
-    setFormData({
-      opportunity_id: meeting.opportunity_id || "Sin oportunidad",
-      meeting_type: meeting.meeting_type,
-      meeting_date: meeting.meeting_date,
-      feeling: meeting.feeling,
-      notes: meeting.notes || "",
-    });
-    setIsEditDialogOpen(true);
-  };
+const openEditDialog = () => {
+  if (!meeting) return;
+  
+  // Formatear la fecha para el input type="date" (YYYY-MM-DD)
+  const formattedDate = meeting.meeting_date.includes('T') 
+    ? meeting.meeting_date.split('T')[0]
+    : meeting.meeting_date.split(' ')[0];
+  
+  setFormData({
+    opportunity_id: meeting.opportunity_id || "Sin oportunidad",
+    meeting_type: meeting.meeting_type,
+    meeting_date: formattedDate,
+    feeling: meeting.feeling,
+    notes: meeting.notes || "",
+  });
+  setIsEditDialogOpen(true);
+};
 
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -299,12 +321,7 @@ const handleGenerateFollowUp = async () => {
             {meeting.meeting_type}
           </h1>
           <p className="text-xl text-muted-foreground mt-1">
-            {new Date(meeting.meeting_date).toLocaleDateString('es-ES', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
+            {formatDateOnly(meeting.meeting_date)}
           </p>
         </div>
        <div className="flex gap-2">
@@ -341,7 +358,7 @@ const handleGenerateFollowUp = async () => {
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">Fecha:</span>
-              <span>{formatDateES(meeting.meeting_date)}</span>
+              <span>{formatDateOnly(meeting.meeting_date)}</span>
             </div>
             <div>
               <span className="font-medium">Tipo:</span>{' '}

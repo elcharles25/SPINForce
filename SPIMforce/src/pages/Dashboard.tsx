@@ -89,8 +89,9 @@ interface Meeting {
   meeting_type: string;
   organization: string;
   contactName: string;
+  contactId: string;
   opportunityId: string;
-}
+  }
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -218,7 +219,8 @@ const loadMeetings = async () => {
               meeting_type: meetingType,
               organization: opp.contact.organization,
               contactName: `${opp.contact.first_name} ${opp.contact.last_name}`,
-              opportunityId: opp.id
+              opportunityId: opp.id,
+              contactId: opp.contact.id,
             });
           }
         });
@@ -241,7 +243,8 @@ const loadMeetings = async () => {
         meeting_type: meetingType,
         organization: meeting.contact?.organization || 'Sin organización',
         contactName: meeting.contact ? `${meeting.contact.first_name} ${meeting.contact.last_name}` : 'Sin contacto',
-        opportunityId: ''
+        opportunityId: '',
+        contactId: meeting.contact.id,
       });
     }
   });
@@ -1279,7 +1282,7 @@ if (metrics.contacts.total === 0 && metrics.accounts.total === 0) {
                 <div
                   key={index}
                   className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/opportunities/${meeting.opportunityId}`)}
+                  onClick={() => navigate(`/crm/${meeting.contactId}`)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">

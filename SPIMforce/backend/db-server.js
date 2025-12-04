@@ -142,17 +142,33 @@ function parseJSONField(value, defaultValue = []) {
 }
 
 // Función helper para formatear fechas con hora
-// Función helper para formatear fechas con hora
 function formatDateTime(dateString) {
   if (!dateString) return null;
   
   try {
-    // Intentar parsear como Date (funciona con ISO y otros formatos estándar)
-    const date = new Date(dateString);
+    let date;
+    
+    // Caso 1: Formato DD/MM/YYYY HH:MM (español)
+    if (dateString.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+      const parts = dateString.split(' ');
+      const datePart = parts[0]; // DD/MM/YYYY
+      const timePart = parts[1] || '00:00'; // HH:MM
+      
+      const [day, month, year] = datePart.split('/');
+      
+      // Construir fecha en formato ISO para que sea válida
+      const isoString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${timePart}:00`;
+      date = new Date(isoString);
+    }
+    // Caso 2: Formato YYYY-MM-DD HH:MM o ISO
+    else {
+      date = new Date(dateString);
+    }
     
     // Verificar si la fecha es válida
     if (isNaN(date.getTime())) {
       console.warn('Fecha inválida:', dateString);
+      // ⭐ DEVOLVER LA FECHA ORIGINAL en lugar de lanzar error
       return dateString;
     }
     
@@ -165,10 +181,10 @@ function formatDateTime(dateString) {
     return `${day}/${month}/${year} ${hours}:${minutes}`;
   } catch (e) {
     console.error('❌ Error formateando fecha:', dateString, e);
+    // ⭐ DEVOLVER LA FECHA ORIGINAL en lugar de null
     return dateString;
   }
 }
-
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -1862,13 +1878,18 @@ app.post('/api/meetings', (req, res) => {
       return res.status(400).json({ error: 'meeting_date es requerido' });
     }
     
+    // ⭐ CORRECCIÓN: Usar 'Sin oportunidad' si opportunity_id es null/undefined/vacío
+    const finalOpportunityId = opportunity_id && opportunity_id !== 'none' && opportunity_id !== '' 
+      ? opportunity_id 
+      : 'Sin oportunidad';
+    
     db.run(`
       INSERT INTO meetings (
         id, opportunity_id, contact_id, meeting_type, meeting_date, feeling, notes, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `, [
       id, 
-      opportunity_id || null, 
+      finalOpportunityId,  // ⭐ Siempre tiene un valor válido
       contact_id, 
       meeting_type, 
       meeting_date, 
@@ -1916,15 +1937,13 @@ app.put('/api/meetings/:id', (req, res) => {
   try {
     const { id } = req.params;
     
-    // Extraer TODOS los campos del body con valores por defecto
-    const opportunity_id = req.body.opportunity_id || null;
+    const opportunity_id = req.body.opportunity_id;
     const contact_id = req.body.contact_id;
     const meeting_type = req.body.meeting_type;
     const meeting_date = req.body.meeting_date;
     const feeling = req.body.feeling || '';
     const notes = req.body.notes || null;
     
-    // Validar campos requeridos
     if (!contact_id) {
       return res.status(400).json({ error: 'contact_id es requerido' });
     }
@@ -1935,12 +1954,17 @@ app.put('/api/meetings/:id', (req, res) => {
       return res.status(400).json({ error: 'meeting_date es requerido' });
     }
     
+    // ⭐ CORRECCIÓN: Usar 'Sin oportunidad' si opportunity_id es null/undefined/vacío
+    const finalOpportunityId = opportunity_id && opportunity_id !== 'none' && opportunity_id !== '' 
+      ? opportunity_id 
+      : 'Sin oportunidad';
+    
     db.run(`
       UPDATE meetings SET
         opportunity_id = ?, contact_id = ?, meeting_type = ?, meeting_date = ?, feeling = ?, notes = ?
       WHERE id = ?
     `, [
-      opportunity_id,
+      finalOpportunityId,  // ⭐ Siempre tiene un valor válido
       contact_id,
       meeting_type,
       meeting_date,
@@ -2309,6 +2333,7 @@ app.delete('/api/accounts/:id/logo', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 const PORT = process.env.PORT || 3001;
 

@@ -1665,13 +1665,14 @@ const handleShowMore = () => {
           ) : (
           <div className="bg-card rounded-lg shadow overflow-hidden overflow-x-auto">
             <Table className="w-full table-fixed">
-            <colgroup>
-              <col className="w-[80px]" />
-              <col className="w-[120px]" />
-              <col className="w-[120px]" />
-              <col className="w-[100px]" />
-              <col className="w-[600px]" />
-            </colgroup>
+              <colgroup>
+                <col className="w-[80px]" />
+                <col className="w-[120px]" />
+                <col className="w-[120px]" />
+                <col className="w-[100px]" />
+                <col className="w-[550px]" />
+                <col className="w-[50px]" />
+              </colgroup>
               <TableHeader>
                 <TableRow className="bg-muted hover:bg-muted/50"> 
                   <TableHead className="text-center">Fecha</TableHead>
@@ -1679,54 +1680,91 @@ const handleShowMore = () => {
                   <TableHead className="text-center">Categoría</TableHead>
                   <TableHead className="text-center">Feeling</TableHead>
                   <TableHead className="text-center">Notas</TableHead>
+                  <TableHead className="text-center"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="[&>*]:py-1">
                 {filteredMeetings.slice(0, visibleCount).map((meeting) => (
-                 <TableRow 
-                    key={meeting.id} 
-                    className="cursor-pointer hover:bg-slate-50"
-                    onClick={() => navigate(`/meetings/${meeting.id}`, { 
-                      state: { from: 'contact', contactId: id } 
-                    })}
+              <TableRow 
+                key={meeting.id} 
+                className="hover:bg-slate-50"
+              >
+                <TableCell 
+                  className="text-center py-1 text-sm cursor-pointer"
+                  onClick={() => navigate(`/meetings/${meeting.id}`, { 
+                    state: { from: 'contact', contactId: id } 
+                  })}
+                >
+                  {formatDateTime(meeting.meeting_date)}
+                </TableCell>
+                <TableCell 
+                  className="text-center py-1 cursor-pointer"
+                  onClick={() => navigate(`/meetings/${meeting.id}`, { 
+                    state: { from: 'contact', contactId: id } 
+                  })}
+                >
+                  <Badge
+                    variant="outline"
+                    className={`text-xs px-2 rounded-full border ${
+                      meeting.meeting_type === "Email"
+                        ? ""
+                        : meeting.meeting_type === "Otros" ? "bg-slate-100 text-slate-700 border-slate-300"
+                        : meeting.meeting_type === "Delivery" ? "bg-blue-50 text-blue-700 border-blue-300"
+                        : "bg-green-50 text-green-700 border-green-300"
+                    }`}
                   >
-                    <TableCell className="text-center py-1 text-sm">{formatDateTime(meeting.meeting_date)}</TableCell>
-                    <TableCell className="text-center py-1">
-                      <Badge
-                        variant="outline"
-                        className={`text-xs px-2 rounded-full border ${
-                          meeting.meeting_type === "Email"
-                            ? ""
-                            : meeting.meeting_type === "Otros" ? "bg-slate-100 text-slate-700 border-slate-300"
-                            : meeting.meeting_type === "Delivery" ? "bg-blue-50 text-blue-700 border-blue-300"
-                            : "bg-green-50 text-green-700 border-green-300"
-                        }`}
-                      >
-                        {meeting.meeting_type}
-                      </Badge>
-
-                    </TableCell>
-                        <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className="text-xs py-1 rounded-full"
-                        >
-                          {meeting.notes?.startsWith("[Email cliente]") ? "Email cliente"
-                            : meeting.notes?.startsWith("[Email CSM]") ? "Email CSM"
-                            : meeting.notes?.startsWith("[Email EP]") ? "Email EP"
-                            : "Reunión"}
-                        </Badge>
-                      </TableCell>
-                    <TableCell className="text-center py-1">
-                      <div className="flex items-center justify-center gap-2 py-1">
-                        <div className={`w-3 h-3 rounded-full ${getFeelingColor(meeting.feeling)}`} />
-                        <span className="sm-sm">{getFeelingLabel(meeting.feeling)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-md truncate py-1 text-sm">
-                      {meeting.notes || 'Sin notas'}
-                    </TableCell>
-                  </TableRow>
+                    {meeting.meeting_type}
+                  </Badge>
+                </TableCell>
+                <TableCell 
+                  className="text-center cursor-pointer"
+                  onClick={() => navigate(`/meetings/${meeting.id}`, { 
+                    state: { from: 'contact', contactId: id } 
+                  })}
+                >
+                  <Badge
+                    variant="outline"
+                    className="text-xs py-1 rounded-full"
+                  >
+                    {meeting.notes?.startsWith("[Email cliente]") ? "Email cliente"
+                      : meeting.notes?.startsWith("[Email CSM]") ? "Email CSM"
+                      : meeting.notes?.startsWith("[Email EP]") ? "Email EP"
+                      : "Reunión"}
+                  </Badge>
+                </TableCell>
+                <TableCell 
+                  className="text-center py-1 cursor-pointer"
+                  onClick={() => navigate(`/meetings/${meeting.id}`, { 
+                    state: { from: 'contact', contactId: id } 
+                  })}
+                >
+                  <div className="flex items-center justify-center gap-2 py-1">
+                    <div className={`w-3 h-3 rounded-full ${getFeelingColor(meeting.feeling)}`} />
+                    <span className="sm-sm">{getFeelingLabel(meeting.feeling)}</span>
+                  </div>
+                </TableCell>
+                <TableCell 
+                  className="max-w-md truncate py-1 text-sm cursor-pointer"
+                  onClick={() => navigate(`/meetings/${meeting.id}`, { 
+                    state: { from: 'contact', contactId: id } 
+                  })}
+                >
+                  {meeting.notes || 'Sin notas'}
+                </TableCell>
+                <TableCell className="text-center py-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteMeetingDialog(meeting.id);
+                    }}
+                    className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
                 ))}
               </TableBody>
             </Table>
