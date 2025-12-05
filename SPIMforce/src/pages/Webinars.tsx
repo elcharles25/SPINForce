@@ -979,7 +979,7 @@ const handleSendMassEmails = async () => {
                       </div>
 
                       {/* BARRA DE BÚSQUEDA */}
-                      {filteredContacts.length > 0 && (
+                      {selectedRole && (
                         <div className="mb-3">
                           <Input
                             type="text"
