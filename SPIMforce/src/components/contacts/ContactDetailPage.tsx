@@ -1226,14 +1226,14 @@ const handleShowMore = () => {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold text-slate-800">Información de Contacto</CardTitle>
               <Badge
-                className={`text-xs px-3 py-1 rounded-full font-medium shadow-sm ${
+                className={`px-3 py-1 font-medium ${
                   contact.contact_type === "Cliente" || contact.contact_type === "Cliente proxy"
-                    ? "bg-green-500 hover:bg-green-600"
+                    ? "text-lg bg-white hover:bg-white text-green-600"
                     : contact.contact_type === "Oportunidad"
-                    ? "bg-blue-500 hover:bg-blue-600 cursor-pointer"
+                    ? "text-xs bg-indigo-50 border-indigo-300 text-indigo-400 cursor-pointer hover:bg-indigo-200 hover:border-indigo-500 hover:text-indigo-600"
                     : contact.contact_type === "Prospect"
-                    ? "bg-amber-500 hover:bg-amber-600"
-                    : "bg-slate-500 hover:bg-slate-600"
+                    ? "text-lg bg-white hover:bg-white text-amber-600"
+                    : "bg-slate-500 hover:bg-slate-500"
                 }`}
                 onClick={() => {
                   if (contact.contact_type === "Oportunidad" && opportunities.length > 0) {
@@ -1241,7 +1241,9 @@ const handleShowMore = () => {
                   }
                 }}
               >
-                {contact.contact_type}
+              {contact.contact_type === "Oportunidad"
+                ? `Ver ${contact.contact_type}`
+                : contact.contact_type}
               </Badge>
             </div>
           </CardHeader>
