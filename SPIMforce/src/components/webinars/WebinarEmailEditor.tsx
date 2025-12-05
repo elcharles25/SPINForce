@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Save } from "lucide-react";
+import { HtmlEditor } from "@/components/ui/html-editor";
 
 export function WebinarEmailEditor() {
   const [emailConfig, setEmailConfig] = useState({
@@ -67,12 +68,11 @@ export function WebinarEmailEditor() {
         </div>
         <div>
           <Label htmlFor="html">Plantilla HTML</Label>
-          <Textarea
-            id="html"
+          <HtmlEditor
             value={emailConfig.html}
-            onChange={(e) => setEmailConfig({ ...emailConfig, html: e.target.value })}
-            rows={10}
-            className="font-mono text-sm"
+            onChange={(html) => setEmailConfig({ ...emailConfig, html })}
+            placeholder="Escribe la plantilla del email..."
+            minHeight="400px"
           />
           <p className="text-sm text-muted-foreground mt-1">
             Variables disponibles: {"{{nombre}}"}, {"{{apellido}}"}, {"{{organizacion}}"}

@@ -3,6 +3,7 @@ import { db } from "@/lib/db-adapter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HtmlEditor } from "@/components/ui/html-editor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -598,6 +599,18 @@ const handleCreateDraftsFromDialog = async () => {
     const [ano, mes] = currentDistribution.month.split('-');
     const mesNombre = getMonthName(parseInt(mes));
 
+    const processHtmlForEmail = (html: string) => {
+      const processed = html
+        .replace(/<p>/g, '<p style="margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;">')
+        .replace(/<p\s+style="([^"]*)"/g, '<p style="$1; margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;"')
+        .replace(/<div>/g, '<div style="margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;">')
+        .replace(/<div\s+style="([^"]*)"/g, '<div style="$1; margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;"')
+        .replace(/<span>/g, '<span style="line-height: 1;">')
+        .replace(/<span\s+style="([^"]*)"/g, '<span style="$1; line-height: 1;"');
+      
+      return `<div style="margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;">${processed}</div>`;
+    };
+
     // ✅ Construir emails de forma más eficiente
     const draftsToCreate = contactsWithWebinars.map((contact: any) => {
       const role = contact.webinar_role || contact.gartner_role;
@@ -624,7 +637,7 @@ const handleCreateDraftsFromDialog = async () => {
       return {
           to: contact.email,
           subject: replaceTemplateVariables(template.subject || `Webinars Gartner ${mesNombre} ${ano}`, variables),
-          body: replaceTemplateVariables(template.html || '', variables) + signature,
+          body: processHtmlForEmail(replaceTemplateVariables(template.html || '', variables)) + '<br>' + processHtmlForEmail(signature),
           attachments: [{
             filename: currentDistribution.file_name,
             content: currentDistribution.file_url.startsWith('http')   // ✅ url → content
@@ -677,6 +690,17 @@ const handleSendMassEmails = async () => {
     const emailSignature = await db.getSetting('email_signature');
     const signature = emailSignature?.value?.signature || '';
     const selectedContacts = filteredContacts.filter(c => selectedContactIds.has(c.id));
+    const processHtmlForEmail = (html: string) => {
+      const processed = html
+        .replace(/<p>/g, '<p style="margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;">')
+        .replace(/<p\s+style="([^"]*)"/g, '<p style="$1; margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;"')
+        .replace(/<div>/g, '<div style="margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;">')
+        .replace(/<div\s+style="([^"]*)"/g, '<div style="$1; margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;"')
+        .replace(/<span>/g, '<span style="line-height: 1;">')
+        .replace(/<span\s+style="([^"]*)"/g, '<span style="$1; line-height: 1;"');
+      
+      return `<div style="margin: 0; padding: 0; line-height: 1; mso-line-height-rule: exactly;">${processed}</div>`;
+    };
 
     const draftsToCreate = selectedContacts.map((contact) => {
       const variables = {
@@ -692,7 +716,7 @@ const handleSendMassEmails = async () => {
       return {
         to: contact.email,
         subject: replaceTemplateVariables(emailSubject, variables),
-        body: replaceTemplateVariables(emailBody, variables) + signature,
+        body: processHtmlForEmail(replaceTemplateVariables(emailBody, variables)) + '<br>' + processHtmlForEmail(signature),
         attachments: attachedFiles.length > 0 
           ? attachedFiles.map(file => ({
               filename: file.name,
@@ -1051,13 +1075,11 @@ const handleSendMassEmails = async () => {
 
                     <div>
                       <Label htmlFor="email-body">Cuerpo del Email (HTML)</Label>
-                      <Textarea
-                        id="email-body"
+                      <HtmlEditor
                         value={emailBody}
-                        onChange={(e) => setEmailBody(e.target.value)}
-                        placeholder="Escribe el cuerpo del email en HTML..."
-                        rows={12}
-                        className="font-mono text-sm"
+                        onChange={setEmailBody}
+                        placeholder="Escribe el cuerpo del email..."
+                        minHeight="400px"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         Variables disponibles: {`{{Nombre}}, {{Apellido}}, {{Organización}}, {{Título}}`}
@@ -1133,7 +1155,7 @@ const handleSendMassEmails = async () => {
         </Tabs>
 
         <Dialog open={showEmailEditor} onOpenChange={setShowEmailEditor}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Configurar Plantilla de Email</DialogTitle>
             </DialogHeader>

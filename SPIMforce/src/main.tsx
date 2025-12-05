@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import "./app.css";
+import './styles/fonts.css';
 
 // Leer de variables de entorno
 const apiKey = import.meta.env.VITE_GOOGLE_GEMINI_API_KEY as string;

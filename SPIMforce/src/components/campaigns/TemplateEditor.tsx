@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Save, X, Paperclip, Trash2 } from "lucide-react";
+import { HtmlEditor } from "@/components/ui/html-editor";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface TemplateEditorProps {
@@ -296,12 +297,11 @@ const handleDelete = async () => {
     </div>
     <div>
       <Label htmlFor={`email_${num}_html`}>HTML</Label>
-      <Textarea
-        id={`email_${num}_html`}
+      <HtmlEditor
         value={formData[`email_${num}_html` as keyof typeof formData] as string}
-        onChange={(e) => setFormData({ ...formData, [`email_${num}_html`]: e.target.value })}
-        rows={6}
-        className="font-mono text-sm"
+        onChange={(html) => setFormData({ ...formData, [`email_${num}_html`]: html })}
+        placeholder={`Escribe el contenido del email ${num}...`}
+        minHeight="300px"
       />
       <p className="text-sm text-muted-foreground mt-1">
             Variables disponibles: {"{{nombre}}"}, {"{{nombreAE}}"}, {"{{ano}}"}, {"{{anosiguiente}}"}, {"{{compania}}"}

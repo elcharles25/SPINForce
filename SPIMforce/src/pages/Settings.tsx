@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { HtmlEditor } from "@/components/ui/html-editor";
 import { Save, Download, Upload, AlertTriangle } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -317,35 +318,33 @@ const migrateAttachments = async () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="signature">
-            <Card>
-              <CardHeader>
-                <CardTitle>Firma de Email</CardTitle>
-                <CardDescription>
-                  Esta firma se incluirá automáticamente en todos los emails de campañas y webinars
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="signature">Firma HTML</Label>
-                  <Textarea
-                    id="signature"
-                    value={signature}
-                    onChange={(e) => setSignature(e.target.value)}
-                    rows={10}
-                    className="font-mono text-sm"
-                    placeholder="<p>Saludos</p>"
-                  />
-                </div>
-                <Button 
-                  className="rounded-full shadow-sm hover:shadow-md transition-shadow bg-indigo-500 hover:bg-indigo-600"
-                  onClick={saveSignature}>
-                  <Save className="h-4 w-4 mr-2" />
-                  Guardar Firma
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
+        <TabsContent value="signature">
+          <Card>
+            <CardHeader>
+              <CardTitle>Firma de Email</CardTitle>
+              <CardDescription>
+                Esta firma se incluirá automáticamente en todos los emails de campañas y webinars
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="signature">Firma HTML</Label>
+                <HtmlEditor
+                  value={signature}
+                  onChange={setSignature}
+                  placeholder="Escribe tu firma de email..."
+                  minHeight="300px"
+                />
+              </div>
+              <Button 
+                className="rounded-full shadow-sm hover:shadow-md transition-shadow bg-indigo-500 hover:bg-indigo-600"
+                onClick={saveSignature}>
+                <Save className="h-4 w-4 mr-2" />
+                Guardar Firma
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
           <TabsContent value="database">
             <Card>
