@@ -41,7 +41,7 @@ const webinarStorage = multer.diskStorage({
   destination: webinarsDir,
   filename: (req, file, cb) => {
     // Mantener el nombre original con timestamp para evitar colisiones
-    const uniqueName = `${Date.now()}-${file.originalname}`;
+    const uniqueName = `${file.originalname}`;
     cb(null, uniqueName);
   }
 });
@@ -90,8 +90,7 @@ if (!fs.existsSync(attachmentsDir)) {
 const storage = multer.diskStorage({
   destination: attachmentsDir,
   filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${file.originalname}`;
-    cb(null, uniqueName);
+    cb(null, file.originalname);
   }
 });
 
@@ -1431,7 +1430,7 @@ app.post('/api/migrate-attachments', async (req, res) => {
               const buffer = Buffer.from(base64Data, 'base64');
               
               // Generar nombre único
-              const filename = `${Date.now()}-${attachment.name}`;
+              const filename = `${attachment.name}`;
               const filepath = path.join(attachmentsDir, filename);
               
               // Guardar archivo

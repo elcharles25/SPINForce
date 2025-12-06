@@ -258,7 +258,7 @@ const handleDelete = async () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="name">Nombre de la Plantilla</Label>
@@ -282,7 +282,7 @@ const handleDelete = async () => {
       </div>
 
    {[1, 2, 3, 4, 5].map((num) => (
-  <div key={num} className="border p-4 rounded-lg space-y-2">
+  <div key={num} className="border bg-slate-50 p-4 rounded-lg space-y-2">
     <h3 className="font-semibold">Email {num}</h3>
     <div>
       <Label htmlFor={`email_${num}_subject`}>Asunto</Label>
@@ -296,7 +296,7 @@ const handleDelete = async () => {
       </p>
     </div>
     <div>
-      <Label htmlFor={`email_${num}_html`}>HTML</Label>
+      <Label htmlFor={`email_${num}_html`}>Cuerpo</Label>
       <HtmlEditor
         value={formData[`email_${num}_html` as keyof typeof formData] as string}
         onChange={(html) => setFormData({ ...formData, [`email_${num}_html`]: html })}
@@ -305,6 +305,9 @@ const handleDelete = async () => {
       />
       <p className="text-sm text-muted-foreground mt-1">
             Variables disponibles: {"{{nombre}}"}, {"{{nombreAE}}"}, {"{{ano}}"}, {"{{anosiguiente}}"}, {"{{compania}}"}
+      </p>
+      <p className="text-sm text-muted-foreground mt-1">
+      No es necesario añadir firma. Se añade automáticamente la firma definida en el aparatado de configuración.
       </p>
     </div>
     

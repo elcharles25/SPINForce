@@ -510,8 +510,79 @@ Devuelve SOLO un JSON válido (sin markdown, sin comillas adicionales) con esta 
       console.log('   Mes:', month);
       console.log('   PDF:', uploadedPdf);
 
+      const DEFAULT_WEBINAR_TEMPLATE = {
+          subject: "Webinars Gartner {{mes}} {{anio}}",
+          html: `<div>
+          <p><span style="font-size:11.0pt;">Hola {{Nombre}},
+          <br><br>Como en ocasiones anteriores, Gartner ha publicado el listado de webinars gratuitos del mes que viene para que puedas apuntarte tú o alguien de tu equipo (adjunto en pdf).
+          <br><br> De los webinars de este mes, creo que pueden resultarte intersantes: 
+          <br><br>
+          <div style="margin-left: 30px;">
+          <table border=1 cellspacing=0 cellpadding=0 style='border-collapse:collapse;border:none;border-top:solid #7F7F7F .5pt;border-bottom:solid #7F7F7F .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+          <tr style='height:14.15pt'>
+            <td width=91 style='width:68.05pt;border:none;background:#D9D9D9;padding:0cm 5.4pt 0cm 5.4pt;height:14.15pt'>
+            <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt;color:black'>Fecha</span></b></p>
+            </td>
+            <td width=68 style='width:51.0pt;border:none;background:#D9D9D9;padding:0cm 5.4pt 0cm 5.4pt;height:14.15pt'>
+            <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt;color:black'>Hora</span></b></p>
+            </td>
+            <td width=476 style='width:357.15pt;border:none;background:#D9D9D9;padding:0cm 5.4pt 0cm 5.4pt;height:14.15pt'>
+            <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt;color:black'>Título</span></b></p>
+            </td>
+            <td width=155 style='width:116.2pt;border:none;background:#D9D9D9;padding:0cm 5.4pt 0cm 5.4pt;height:14.15pt'>
+            <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt;color:black'>Analista</span></b></p>
+            </td>
+          </tr>
+          <tr style='height:1.0pt'>
+            <td width=91 style='width:68.05pt;border:none;border-bottom:solid #7F7F7F 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1.0pt'>
+            <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:7.0pt'>&nbsp;</span></b></p>
+            </td>
+            <td width=68 style='width:51.0pt;border:none;border-bottom:solid #7F7F7F 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1.0pt'>
+            <p align=center style='text-align:center;margin:0cm'><span style='font-size:7.0pt'>&nbsp;</span></p>
+            </td>
+            <td width=476 style='width:357.15pt;border:none;border-bottom:solid #7F7F7F 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1.0pt'>
+            <p style='margin:0cm'><span style='font-size:7.0pt'>&nbsp;</span></p>
+            </td>
+            <td width=155 style='width:116.2pt;border:none;border-bottom:solid #7F7F7F 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1.0pt'>
+            <p align=center style='text-align:center;margin:0cm'><span style='font-size:7.0pt'>&nbsp;</span></p>
+            </td>
+          </tr>
+          <tr style='height:19.85pt'>
+            <td width=91 style='width:68.05pt;border:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+            <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt'>{{Fecha1}}</span></b></p>
+            </td>
+            <td width=68 style='width:51.0pt;border:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+            <p align=center style='text-align:center;margin:0cm'><span style='font-size:9.0pt'>{{Hora1}}</span></p>
+            </td>
+            <td width=476 style='width:357.15pt;border:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+            <p style='margin:0cm'><span style='font-size:9.0pt'>{{Webinar1}}</span></p>
+            </td>
+            <td width=155 style='width:116.2pt;border:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+            <p align=center style='text-align:center;margin:0cm'><span style='font-size:9.0pt'>{{Analista1}}</span></p>
+            </td>
+          </tr>
+          <tr style='height:19.85pt'>
+            <td width=91 style='width:68.05pt;border-top:solid #7F7F7F 1.0pt;border-left:none;border-bottom:solid #7F7F7F 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+            <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt'>{{Fecha2}}</span></b></p>
+            </td>
+            <td width=68 style='width:51.0pt;border-top:solid #7F7F7F 1.0pt;border-left:none;border-bottom:solid #7F7F7F 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+            <p align=center style='text-align:center;margin:0cm'><span style='font-size:9.0pt'>{{Hora2}}</span></p>
+            </td>
+            <td width=476 style='width:357.15pt;border-top:solid #7F7F7F 1.0pt;border-left:none;border-bottom:solid #7F7F7F 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+            <p style='margin:0cm'><span style='font-size:9.0pt'>{{Webinar2}}</span></p>
+            </td>
+            <td width=155 style='width:116.2pt;border-top:solid #7F7F7F 1.0pt;border-left:none;border-bottom:solid #7F7F7F 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+            <p align=center style='text-align:center;margin:0cm'><span style='font-size:9.0pt'>{{Analista2}}</span></p>
+            </td>
+          </tr>
+          </table>
+          </div>
+          <br><span style="font-size:11.0pt;">Siéntente libre de enviar el listado a vuestro equipo o a quién consideres conveniente para que se puedan apuntar.</span></p>
+          </div>`
+          };
+
       const settings = await db.getSetting('webinar_email_template');
-      const emailTemplate = settings?.value || { subject: '', html: '' };
+      const emailTemplate = settings?.value || DEFAULT_WEBINAR_TEMPLATE;
       
       const newDistribution = {
         month,
@@ -575,12 +646,87 @@ const handleCreateDraftsFromDialog = async () => {
 
   try {
     // ✅ Una sola llamada para obtener todos los datos necesarios
-    const [allContacts, currentDistribution, emailSignature, emailTemplate] = await Promise.all([
+    const [allContacts, currentDistribution, emailSignature, emailTemplateSetting] = await Promise.all([
       db.getContacts(),
       db.getDistribution(currentDistributionId),
       db.getSetting('email_signature'),
       db.getSetting('webinar_email_template')
     ]);
+
+    // Plantilla por defecto si no existe en BD
+    // Plantilla por defecto hardcodeada
+const DEFAULT_WEBINAR_TEMPLATE = {
+  subject: "Webinars gratuitos Gartner {{mes}} {{anio}} - Comparte con quien consideres",
+  html: `<div>
+<p><span style="font-size:11.0pt;">Hola {{Nombre}},
+<br><br>Como en ocasiones anteriores, Gartner ha publicado el listado de webinars gratuitos del mes que viene para que puedas apuntarte tú o alguien de tu equipo (adjunto en pdf).
+<br><br> De los webinars de este mes, creo que pueden resultarte intersantes: 
+<br><br>
+<div style="margin-left: 30px;">
+<table border=1 cellspacing=0 cellpadding=0 style='border-collapse:collapse;border:none;border-top:solid #7F7F7F .5pt;border-bottom:solid #7F7F7F .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+ <tr style='height:14.15pt'>
+  <td width=91 style='width:68.05pt;border:none;background:#D9D9D9;padding:0cm 5.4pt 0cm 5.4pt;height:14.15pt'>
+  <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt;color:black'>Fecha</span></b></p>
+  </td>
+  <td width=68 style='width:51.0pt;border:none;background:#D9D9D9;padding:0cm 5.4pt 0cm 5.4pt;height:14.15pt'>
+  <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt;color:black'>Hora</span></b></p>
+  </td>
+  <td width=476 style='width:357.15pt;border:none;background:#D9D9D9;padding:0cm 5.4pt 0cm 5.4pt;height:14.15pt'>
+  <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt;color:black'>Título</span></b></p>
+  </td>
+  <td width=155 style='width:116.2pt;border:none;background:#D9D9D9;padding:0cm 5.4pt 0cm 5.4pt;height:14.15pt'>
+  <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt;color:black'>Analista</span></b></p>
+  </td>
+ </tr>
+ <tr style='height:1.0pt'>
+  <td width=91 style='width:68.05pt;border:none;border-bottom:solid #7F7F7F 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1.0pt'>
+  <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:7.0pt'>&nbsp;</span></b></p>
+  </td>
+  <td width=68 style='width:51.0pt;border:none;border-bottom:solid #7F7F7F 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1.0pt'>
+  <p align=center style='text-align:center;margin:0cm'><span style='font-size:7.0pt'>&nbsp;</span></p>
+  </td>
+  <td width=476 style='width:357.15pt;border:none;border-bottom:solid #7F7F7F 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1.0pt'>
+  <p style='margin:0cm'><span style='font-size:7.0pt'>&nbsp;</span></p>
+  </td>
+  <td width=155 style='width:116.2pt;border:none;border-bottom:solid #7F7F7F 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1.0pt'>
+  <p align=center style='text-align:center;margin:0cm'><span style='font-size:7.0pt'>&nbsp;</span></p>
+  </td>
+ </tr>
+ <tr style='height:19.85pt'>
+  <td width=91 style='width:68.05pt;border:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+  <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt'>{{Fecha1}}</span></b></p>
+  </td>
+  <td width=68 style='width:51.0pt;border:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+  <p align=center style='text-align:center;margin:0cm'><span style='font-size:9.0pt'>{{Hora1}}</span></p>
+  </td>
+  <td width=476 style='width:357.15pt;border:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+  <p style='margin:0cm'><span style='font-size:9.0pt'>{{Webinar1}}</span></p>
+  </td>
+  <td width=155 style='width:116.2pt;border:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+  <p align=center style='text-align:center;margin:0cm'><span style='font-size:9.0pt'>{{Analista1}}</span></p>
+  </td>
+ </tr>
+ <tr style='height:19.85pt'>
+  <td width=91 style='width:68.05pt;border-top:solid #7F7F7F 1.0pt;border-left:none;border-bottom:solid #7F7F7F 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+  <p align=center style='text-align:center;margin:0cm'><b><span style='font-size:9.0pt'>{{Fecha2}}</span></b></p>
+  </td>
+  <td width=68 style='width:51.0pt;border-top:solid #7F7F7F 1.0pt;border-left:none;border-bottom:solid #7F7F7F 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+  <p align=center style='text-align:center;margin:0cm'><span style='font-size:9.0pt'>{{Hora2}}</span></p>
+  </td>
+  <td width=476 style='width:357.15pt;border-top:solid #7F7F7F 1.0pt;border-left:none;border-bottom:solid #7F7F7F 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+  <p style='margin:0cm'><span style='font-size:9.0pt'>{{Webinar2}}</span></p>
+  </td>
+  <td width=155 style='width:116.2pt;border-top:solid #7F7F7F 1.0pt;border-left:none;border-bottom:solid #7F7F7F 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5.4pt;height:19.85pt'>
+  <p align=center style='text-align:center;margin:0cm'><span style='font-size:9.0pt'>{{Analista2}}</span></p>
+  </td>
+ </tr>
+</table>
+</div>
+<br><span style="font-size:11.0pt;">Siéntente libre de enviar el listado a vuestro equipo o a quién consideres conveniente para que se puedan apuntar.</span></p>
+</div>`
+};
+
+const emailTemplate = emailTemplateSetting?.value || DEFAULT_WEBINAR_TEMPLATE;
 
     const contactsWithWebinars = allContacts.filter((c: any) => 
       Boolean(c.webinars_subscribed) && c.webinar_role?.trim()
@@ -636,8 +782,8 @@ const handleCreateDraftsFromDialog = async () => {
 
       return {
           to: contact.email,
-          subject: replaceTemplateVariables(template.subject || `Webinars Gartner ${mesNombre} ${ano}`, variables),
-          body: processHtmlForEmail(replaceTemplateVariables(template.html || '', variables)) + '<br>' + processHtmlForEmail(signature),
+          subject: replaceTemplateVariables(emailTemplate.subject || `Webinars gratuitos Gartner ${mes} ${ano} - Comparte con quien consideres`, variables),
+          body: processHtmlForEmail(replaceTemplateVariables(emailTemplate.html || '', variables)) + '<br>' + processHtmlForEmail(signature),
           attachments: [{
             filename: currentDistribution.file_name,
             content: currentDistribution.file_url.startsWith('http')   // ✅ url → content
@@ -1061,7 +1207,7 @@ const handleSendMassEmails = async () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="email-subject">Asunto del Email</Label>
+                      <Label htmlFor="email-subject">Asunto</Label>
                       <Input
                         id="email-subject"
                         value={emailSubject}
@@ -1074,7 +1220,7 @@ const handleSendMassEmails = async () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="email-body">Cuerpo del Email (HTML)</Label>
+                      <Label htmlFor="email-body">Cuerpo</Label>
                       <HtmlEditor
                         value={emailBody}
                         onChange={setEmailBody}

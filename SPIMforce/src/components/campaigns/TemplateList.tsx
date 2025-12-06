@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/db-adapter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, Paperclip, Download, Upload } from "lucide-react";
 import { TemplateEditor } from "./TemplateEditor";
@@ -25,7 +25,10 @@ export function TemplateList() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importingTemplate, setImportingTemplate] = useState(false);  
   const { toast } = useToast();
+  
 
   useEffect(() => {
     fetchTemplates();
@@ -68,9 +71,10 @@ export function TemplateList() {
     fetchTemplates();
   };
 
-  const exportTemplateToXML = (template: Template) => {
-  // Crear estructura XML
-  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+const exportTemplateToXML = async (template: Template) => {
+  try {
+    // Crear estructura XML
+    const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <campaign_template>
   <metadata>
     <name>${escapeXML(template.name)}</name>
@@ -90,107 +94,217 @@ export function TemplateList() {
   }).join('\n  ')}
 </campaign_template>`;
 
-  // Crear y descargar archivo
-  const blob = new Blob([xmlContent], { type: 'application/xml' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${template.name.replace(/[^a-z0-9]/gi, '_')}_template.xml`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+    // Usar JSZip para crear un archivo ZIP
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    
+    // Agregar XML al ZIP
+    zip.file(`${template.name.replace(/[^a-z0-9]/gi, '_')}_template.xml`, xmlContent);
+    
+    // Recopilar todos los adjuntos
+    const allAttachments: any[] = [];
+    for (let i = 1; i <= 5; i++) {
+      const attachments = (template as any)[`email_${i}_attachments`] || [];
+      allAttachments.push(...attachments);
+    }
 
-  toast({ title: "Éxito", description: "Plantilla exportada correctamente" });
+    // Descargar y agregar cada adjunto al ZIP (si hay)
+    if (allAttachments.length > 0) {
+      for (const attachment of allAttachments) {
+        try {
+          const response = await fetch(attachment.url);
+          const blob = await response.blob();
+          zip.file(`attachments/${attachment.filename || attachment.name}`, blob);
+        } catch (error) {
+          console.error(`Error descargando adjunto ${attachment.name}:`, error);
+        }
+      }
+    }
+    
+    // Generar y descargar el ZIP
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${template.name.replace(/[^a-z0-9]/gi, '_')}_template.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast({ 
+      title: "Éxito", 
+      description: allAttachments.length > 0 
+        ? "Plantilla exportada con adjuntos" 
+        : "Plantilla exportada correctamente" 
+    });
+  } catch (error) {
+    console.error("Error exportando plantilla:", error);
+    toast({
+      title: "Error",
+      description: "No se pudo exportar la plantilla",
+      variant: "destructive"
+    });
+  }
 };
 
-  const importTemplateFromXML = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+const handleImportClick = () => {
+  setShowImportDialog(true);
+};
 
-    try {
-      const text = await file.text();
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(text, "text/xml");
+const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (file) {
+    setShowImportDialog(false);
+    importTemplateFromXML(file);
+  }
+  event.target.value = "";
+};
 
-      // Verificar si hay errores de parseo
-      const parserError = xmlDoc.querySelector("parsererror");
-      if (parserError) {
-        throw new Error("El archivo XML no es válido");
+const importTemplateFromXML = async (file: File) => {
+  setImportingTemplate(true);
+  
+  try {
+    let xmlText = "";
+    let attachmentsInZip: { [key: string]: Blob } = {};
+
+    // Verificar si es ZIP
+    if (file.name.endsWith('.zip')) {
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(file);
+      
+      // Buscar el archivo XML
+      const xmlFile = Object.keys(zip.files).find(name => name.endsWith('.xml'));
+      if (!xmlFile) {
+        throw new Error("No se encontró archivo XML en el ZIP");
       }
-
-      // Extraer datos del XML
-      let name = xmlDoc.querySelector("metadata > name")?.textContent || "";
-      const gartner_role = xmlDoc.querySelector("metadata > gartner_role")?.textContent || "";
-
-      // Verificar si ya existe una plantilla con el mismo nombre y rol
-      const existingTemplates = await db.getTemplates();
-      const duplicates = existingTemplates.filter(
-        (t: any) =>
-          t.gartner_role === gartner_role &&
-          t.name.toLowerCase().startsWith(name.toLowerCase())
+      
+      xmlText = await zip.files[xmlFile].async('text');
+      
+      // Extraer adjuntos del ZIP
+      const attachmentFiles = Object.keys(zip.files).filter(name => 
+        name.startsWith('attachments/') && !zip.files[name].dir
       );
+      
+      for (const filename of attachmentFiles) {
+        const blob = await zip.files[filename].async('blob');
+        attachmentsInZip[filename.replace('attachments/', '')] = blob;
+      }
+    } else {
+      throw new Error("Solo se permiten archivos ZIP");
+    }
 
-      // Si existe, agregar sufijo numérico
-      if (duplicates.length > 0) {
-        const existingNames = duplicates.map((t: any) => t.name);
-        let counter = 1;
-        let newName = `${name} (${counter})`;
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-        while (existingNames.includes(newName)) {
-          counter++;
-          newName = `${name} (${counter})`;
-        }
+    const parserError = xmlDoc.querySelector("parsererror");
+    if (parserError) {
+      throw new Error("El archivo XML no es válido");
+    }
 
-        name = newName;
+    let name = xmlDoc.querySelector("metadata > name")?.textContent || "";
+    const gartner_role = xmlDoc.querySelector("metadata > gartner_role")?.textContent || "";
 
-        toast({
-          title: "Nombre modificado",
-          description: `Ya existía una plantilla con ese nombre. Se importará como "${name}"`,
-          duration: 5000,
-        });
+    // Verificar duplicados
+    const existingTemplates = await db.getTemplates();
+    const duplicates = existingTemplates.filter(
+      (t: any) =>
+        t.gartner_role === gartner_role &&
+        t.name.toLowerCase().startsWith(name.toLowerCase())
+    );
+
+    if (duplicates.length > 0) {
+      const existingNames = duplicates.map((t: any) => t.name);
+      let counter = 1;
+      let newName = `${name} (${counter})`;
+
+      while (existingNames.includes(newName)) {
+        counter++;
+        newName = `${name} (${counter})`;
       }
 
-      const templateData: any = {
-        name,
-        gartner_role,
-      };
+      name = newName;
 
-      // Extraer emails
-      for (let i = 1; i <= 5; i++) {
-        const emailNode = xmlDoc.querySelector(`email_${i}`);
-        if (emailNode) {
-          templateData[`email_${i}_subject`] = emailNode.querySelector("subject")?.textContent || "";
-          templateData[`email_${i}_html`] = emailNode.querySelector("html")?.textContent || "";
-
-          const attachmentsText = emailNode.querySelector("attachments")?.textContent || "[]";
-          try {
-            templateData[`email_${i}_attachments`] = JSON.parse(attachmentsText);
-          } catch {
-            templateData[`email_${i}_attachments`] = [];
-          }
-        }
-      }
-
-      // Insertar en la base de datos
-      await db.createTemplate(templateData);
-
-      toast({ title: "Éxito", description: "Plantilla importada correctamente" });
-      fetchTemplates();
-    } catch (error) {
-      console.error("Error importando plantilla:", error);
       toast({
-        title: "Error",
-        description: `No se pudo importar la plantilla: ${
-          error instanceof Error ? error.message : "Error desconocido"
-        }`,
-        variant: "destructive",
+        title: "Nombre modificado",
+        description: `Ya existía una plantilla con ese nombre. Se importará como "${name}"`,
+        duration: 5000,
       });
     }
 
-    // Limpiar input
-    event.target.value = "";
-  };
+    const templateData: any = {
+      name,
+      gartner_role,
+    };
+
+    // Extraer emails y procesar adjuntos
+    for (let i = 1; i <= 5; i++) {
+      const emailNode = xmlDoc.querySelector(`email_${i}`);
+      if (emailNode) {
+        templateData[`email_${i}_subject`] = emailNode.querySelector("subject")?.textContent || "";
+        templateData[`email_${i}_html`] = emailNode.querySelector("html")?.textContent || "";
+
+        const attachmentsText = emailNode.querySelector("attachments")?.textContent || "[]";
+        try {
+          const attachmentsData = JSON.parse(attachmentsText);
+          
+          if (attachmentsData.length > 0) {
+            const processedAttachments = [];
+            
+            for (const attachment of attachmentsData) {
+              const filename = attachment.filename || attachment.name;
+              
+              // Si el adjunto está en el ZIP, subirlo
+              if (attachmentsInZip[filename]) {
+                const formData = new FormData();
+                formData.append('file', attachmentsInZip[filename], filename);
+                
+                const response = await fetch('http://localhost:3001/api/upload-attachment', {
+                  method: 'POST',
+                  body: formData
+                });
+                
+                if (response.ok) {
+                  const result = await response.json();
+                  processedAttachments.push({
+                    name: result.name,
+                    url: `http://localhost:3001${result.url}`,
+                    filename: result.filename,
+                    size: result.size
+                  });
+                }
+              } else {
+                console.warn(`Adjunto no encontrado en ZIP: ${filename}`);
+              }
+            }
+            
+            templateData[`email_${i}_attachments`] = processedAttachments;
+          } else {
+            templateData[`email_${i}_attachments`] = [];
+          }
+        } catch {
+          templateData[`email_${i}_attachments`] = [];
+        }
+      }
+    }
+
+    await db.createTemplate(templateData);
+
+    toast({ title: "Éxito", description: "Plantilla importada correctamente" });
+    fetchTemplates();
+  } catch (error) {
+    console.error("Error importando plantilla:", error);
+    toast({
+      title: "Error",
+      description: `No se pudo importar la plantilla: ${
+        error instanceof Error ? error.message : "Error desconocido"
+      }`,
+      variant: "destructive",
+    });
+  } finally {
+    setImportingTemplate(false);
+  }
+};
 
 // Función auxiliar para escapar caracteres especiales en XML
 const escapeXML = (str: string) => {
@@ -218,17 +332,11 @@ const escapeXML = (str: string) => {
         <Button 
           variant="outline" 
           className="rounded-full shadow-sm hover:shadow-md transition-shadow hover:bg-indigo-100"
-          onClick={() => document.getElementById('import-xml-input')?.click()}>
+          onClick={handleImportClick}>
           <Upload className="h-4 w-4 mr-2" />
           Importar plantilla
         </Button>
-        <input
-          id="import-xml-input"
-          type="file"
-          accept=".xml"
-          onChange={importTemplateFromXML}
-          className="hidden"
-        />
+
       </div>
     </div>
     <div className="bg-card rounded-lg shadow overflow-hidden overflow-x-auto">
@@ -292,13 +400,42 @@ const escapeXML = (str: string) => {
         </Table>
       </div>
         <Dialog open={showEditor} onOpenChange={setShowEditor}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingTemplate ? "Editar Plantilla" : "Nueva Plantilla"}</DialogTitle>
             </DialogHeader>
             <TemplateEditor templateId={editingTemplate} onSave={handleSave} />
           </DialogContent>
         </Dialog>
+        {/* Dialog de importación */}
+  <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Importar Plantilla de Campaña</DialogTitle>
+      </DialogHeader>
+      <div className="space-y-4 py-4">
+        <p className="text-sm text-muted-foreground">
+          Selecciona el archivo ZIP que contiene la plantilla de campaña que deseas importar.
+        </p>
+        <Input
+          type="file"
+          accept=".zip"
+          onChange={handleFileSelected}
+          disabled={importingTemplate}
+          className="cursor-pointer"
+        />
+      </div>
+      <DialogFooter>
+        <Button
+          variant="outline"
+          onClick={() => setShowImportDialog(false)}
+          disabled={importingTemplate}
+        >
+          Cancelar
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
     </div>
   );
 }
