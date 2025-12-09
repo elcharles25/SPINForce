@@ -17,6 +17,8 @@
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
+
+
   // IMPORTANTE: Cargar .env ANTES de hacer nada
   const envPath = path.join(__dirname, '.env');
   dotenv.config({ path: envPath });
@@ -36,6 +38,18 @@
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb' }));
+
+    // ⭐ SERVIR ARCHIVOS ESTÁTICOS DE ATTACHMENTS
+  const attachmentsDir = path.join(__dirname, '..', 'runtime', 'attachments');
+  // Agregar logging al endpoint de attachments
+    app.use('/attachments', (req, res, next) => {
+      console.log(`📎 Request para attachment: ${req.url}`);
+      console.log(`📁 Ruta completa: ${path.join(attachmentsDir, req.url)}`);
+      console.log(`📊 Archivo existe: ${fs.existsSync(path.join(attachmentsDir, req.url))}`);
+      next();
+    }, express.static(attachmentsDir));
+
+  console.log(`📎 Sirviendo attachments desde: ${attachmentsDir}`);
 
   const createOutlookDraft = async (to, subject, body, attachments = [], replyToEmail = null) => {
     console.log('🔍 DEBUG replyToEmail:');

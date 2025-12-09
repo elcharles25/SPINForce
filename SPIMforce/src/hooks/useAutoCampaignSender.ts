@@ -130,30 +130,94 @@ const sendEmail = async (campaign: Campaign, emailNumber: number) => {
     const attachmentsFromTemplate = template[`email_${emailNumber}_attachments`] || [];
     const processedAttachments: { filename: string; content: string }[] = [];
 
-    for (const attachment of attachmentsFromTemplate) {
-      try {
-        if (attachment.url) {
-          const response = await fetch(attachment.url);
-          if (!response.ok) throw new Error(`Error descargando archivo: ${response.status}`);
-          const blob = await response.blob();
-
-          const base64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onload = () => {
-              const result = reader.result as string;
-              const base64Data = result.split(',')[1];
-              resolve(base64Data);
-            };
-            reader.onerror = reject;
-          });
-
-          processedAttachments.push({ filename: attachment.name, content: base64 });
-        }
-      } catch (error) {
-        console.error(`Error procesando adjunto ${attachment.name}:`, error);
+for (const attachment of attachmentsFromTemplate) {
+  try {
+    if (attachment.url) {
+      console.log(`📥 Procesando adjunto:`, {
+        name: attachment.name,
+        url: attachment.url,
+        filename: attachment.filename
+      });
+      
+      let fullUrl = attachment.url;
+      
+      // ⭐ Encodear la URL completa correctamente
+      // Separar la base de la URL del nombre del archivo
+      const urlParts = fullUrl.split('/attachments/');
+      if (urlParts.length === 2) {
+        const baseUrl = urlParts[0] + '/attachments/';
+        const filename = urlParts[1];
+        // Encodear solo el nombre del archivo
+        fullUrl = baseUrl + encodeURIComponent(filename);
       }
+      
+      console.log(`   🌐 URL original: ${attachment.url}`);
+      console.log(`   🌐 URL encoded: ${fullUrl}`);
+      
+      const response = await fetch(fullUrl);
+      
+      console.log(`   📡 Response status: ${response.status}`);
+      console.log(`   📡 Response headers:`, Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        console.error(`   ❌ Error HTTP ${response.status}: ${response.statusText}`);
+        console.error(`   ❌ URL que falló: ${fullUrl}`);
+        
+        // ⭐ FALLBACK: Intentar sin encoding
+        console.log(`   🔄 Intentando sin encoding...`);
+        const response2 = await fetch(attachment.url);
+        
+        if (!response2.ok) {
+          throw new Error(`Error descargando archivo: ${response.status}`);
+        }
+        
+        const blob = await response2.blob();
+        console.log(`   ✅ Descargado con fallback: ${blob.size} bytes`);
+        
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = reject;
+        });
+
+        processedAttachments.push({ 
+          filename: attachment.name, 
+          content: base64 
+        });
+        
+        console.log(`✅ Adjunto procesado (fallback): ${attachment.name}`);
+        continue;
+      }
+      
+      const blob = await response.blob();
+      console.log(`   ✅ Archivo descargado: ${blob.size} bytes`);
+      
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+      });
+
+      processedAttachments.push({ 
+        filename: attachment.name, 
+        content: base64 
+      });
+      
+      console.log(`✅ Adjunto procesado: ${attachment.name}`);
     }
+  } catch (error) {
+    console.error(`❌ Error procesando adjunto ${attachment.name}:`, error);
+    // Continuar sin este adjunto
+  }
+}
 
     // ⭐ AGREGAR replyToEmail al body
     await fetch('http://localhost:3002/api/draft-email', {

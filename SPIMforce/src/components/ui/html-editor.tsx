@@ -59,6 +59,16 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
     updateToolbar();
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.execCommand('insertHTML', false, '<br><br>');
+      if (editorRef.current) {
+        onChange(editorRef.current.innerHTML);
+      }
+    }
+  };
+
   useEffect(() => {
     document.addEventListener('selectionchange', handleSelectionChange);
     return () => {
@@ -66,32 +76,211 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
     };
   }, []);
 
+const convertParagraphsToBr = (html: string): string => {
+  let result = html;
+  
+  result = result.replace(/<p[^>]*>/gi, (match, offset) => offset === 0 ? '<p>' : '<br>');
+  result = result.replace(/<\/p>/gi, (match, offset, string) => {
+    const firstPClose = string.indexOf('</p>');
+    return offset === firstPClose ? '</p>' : '';
+  });
+  //result = result.replace(/<\/p>/gi, ''); 
+  
+  result = result.replace(/<div[^>]*>/gi, '<br>');
+  result = result.replace(/<\/div>/gi, '');
+  
+  result = result.replace(/^<br>/i, '');
+  result = result.replace(/(<br>\s*){3,}/gi, '<br><br>');
+  
+  result = result.replace(/^([^<]*(?:<[^b][^>]*>)*)<br>/i, '$1');
+  result = result.replace(/&nbsp;/gi, '');
+  
+  return result;
+};
+
+  const cleanOutlookContent = (html: string): string => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    const removeAttributes = (element: Element, keepAttributes: string[] = []) => {
+      const attributes = Array.from(element.attributes);
+      attributes.forEach(attr => {
+        if (!keepAttributes.includes(attr.name)) {
+          element.removeAttribute(attr.name);
+        }
+      });
+    };
+
+    const processElement = (element: Element): Element | null => {
+      const tagName = element.tagName.toLowerCase();
+      
+      if (tagName.startsWith('o:') || tagName.startsWith('w:') || 
+          tagName.startsWith('m:') || tagName.startsWith('v:')) {
+        return null;
+      }
+      
+      if (tagName === 'style' || tagName === 'meta' || tagName === 'link' || 
+          tagName === 'xml' || tagName === 'head') {
+        return null;
+      }
+      
+      if (tagName === 'p' || tagName === 'div') {
+        const br = document.createElement('br');
+        const fragment = document.createDocumentFragment();
+        Array.from(element.childNodes).forEach(child => {
+          fragment.appendChild(child.cloneNode(true));
+        });
+        const wrapper = document.createElement('span');
+        wrapper.appendChild(fragment);
+        const content = wrapper.innerHTML;
+        wrapper.innerHTML = '<br>' + content;
+        return wrapper;
+      }
+      
+      if (tagName === 'span' || tagName === 'font') {
+        const hasUsefulContent = element.querySelector('img, table, a, br') || 
+                                 (element.textContent && element.textContent.trim().length > 0);
+        if (!hasUsefulContent && element.childNodes.length === 0) {
+          return null;
+        }
+      }
+      
+      const allowedTags = ['br', 'strong', 'b', 'em', 'i', 'u', 'a', 'img', 
+                          'table', 'tbody', 'thead', 'tr', 'td', 'th', 'ul', 'ol', 'li',
+                          'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+      
+      if (!allowedTags.includes(tagName)) {
+        const fragment = document.createDocumentFragment();
+        Array.from(element.childNodes).forEach(child => {
+          fragment.appendChild(child.cloneNode(true));
+        });
+        const wrapper = document.createElement('span');
+        wrapper.appendChild(fragment);
+        return wrapper;
+      }
+      
+      if (tagName === 'a') {
+        removeAttributes(element, ['href', 'target']);
+        element.setAttribute('style', 'color: #0000EE; text-decoration: underline;');
+      } else if (tagName === 'img') {
+        removeAttributes(element, ['src', 'alt', 'width', 'height']);
+      } else if (tagName === 'table' || tagName === 'td' || tagName === 'th') {
+        removeAttributes(element, []);
+        if (tagName === 'table') {
+          element.setAttribute('style', 'border-collapse: collapse; font-family: Aptos, sans-serif; font-size: 11pt;');
+        } else {
+          element.setAttribute('style', 'border: 1px solid #ddd; padding: 8px; font-family: Aptos, sans-serif; font-size: 11pt;');
+        }
+      } else {
+        removeAttributes(element, []);
+      }
+      
+      Array.from(element.childNodes).forEach(child => {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const processed = processElement(child as Element);
+          if (!processed) {
+            child.remove();
+          } else if (processed !== child) {
+            element.replaceChild(processed, child);
+          }
+        }
+      });
+      
+      return element;
+    };
+
+    const bodyContent = doc.body;
+    Array.from(bodyContent.childNodes).forEach(child => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const processed = processElement(child as Element);
+        if (!processed) {
+          child.remove();
+        } else if (processed !== child) {
+          bodyContent.replaceChild(processed, child);
+        }
+      }
+    });
+    
+    let cleanHtml = bodyContent.innerHTML;
+    
+    cleanHtml = cleanHtml.replace(/<!--\[if[^\]]*\]>[\s\S]*?<!\[endif\]-->/gi, '');
+    cleanHtml = cleanHtml.replace(/<!--[\s\S]*?-->/g, '');
+    cleanHtml = cleanHtml.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    cleanHtml = cleanHtml.replace(/<o:p>\s*<\/o:p>/gi, '');
+    cleanHtml = cleanHtml.replace(/<o:p>/gi, '');
+    cleanHtml = cleanHtml.replace(/<\/o:p>/gi, '');
+    
+    cleanHtml = convertParagraphsToBr(cleanHtml);
+    
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = cleanHtml;
+    
+    const applyDefaultStyles = (element: Element) => {
+      if (element.nodeType === Node.ELEMENT_NODE) {
+        const tagName = element.tagName.toLowerCase();
+        
+        if (tagName === 'span') {
+          const currentStyle = element.getAttribute('style') || '';
+          if (!currentStyle.includes('font-family')) {
+            element.setAttribute('style', 
+              `font-family: Aptos, sans-serif; font-size: 11pt; ${currentStyle}`);
+          }
+        }
+        
+        Array.from(element.children).forEach(child => applyDefaultStyles(child));
+      }
+    };
+    
+    Array.from(tempDiv.children).forEach(child => applyDefaultStyles(child));
+    
+    return tempDiv.innerHTML;
+  };
+
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     
-    let html = e.clipboardData.getData('text/html');
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
     
     if (html) {
-      html = html.replace(/line-height:\s*[^;"}]+;?/gi, '');
-      html = html.replace(/mso-line-height-rule:\s*[^;"}]+;?/gi, '');
-      html = html.replace(/margin:\s*[^;"}]+;?/gi, '');
-      html = html.replace(/padding:\s*[^;"}]+;?/gi, '');
-      html = html.replace(/class=['"]\s*Mso[^'"]*['"]/gi, '');
-      html = html.replace(/class=\w+/gi, '');
-      
-      document.execCommand('insertHTML', false, html);
-    } else {
-      const text = e.clipboardData.getData('text/plain');
-      const lines = text.split('\n').filter(line => line.trim() !== '');
-      const htmlText = lines.map(line => 
-        `<span style="font-family: Aptos, sans-serif; font-size: 11pt;">${line}</span>`
-      ).join('');
+      const cleanedHtml = cleanOutlookContent(html);
+      document.execCommand('insertHTML', false, cleanedHtml);
+    } else if (text) {
+      const lines = text.split('\n');
+      const htmlText = lines.map((line, index) => {
+        if (line.trim() === '') {
+          return '<br>';
+        }
+        const prefix = index > 0 ? '<br>' : '';
+        return `${prefix}<span style="font-family: Aptos, sans-serif; font-size: 11pt;">${line}</span>`;
+      }).join('');
       document.execCommand('insertHTML', false, htmlText);
     }
     
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
     }
+  };
+
+  const removeNestedStyles = (element: HTMLElement, styleProperty: string) => {
+    const children = element.querySelectorAll('*');
+    children.forEach(child => {
+      if (child instanceof HTMLElement && child.style[styleProperty as any]) {
+        child.style.removeProperty(styleProperty);
+      }
+    });
+  };
+
+  const cleanupNestedSpans = (element: HTMLElement) => {
+    const spans = element.querySelectorAll('span');
+    spans.forEach(span => {
+      if (!span.hasAttribute('style') || span.getAttribute('style') === '') {
+        while (span.firstChild) {
+          span.parentNode?.insertBefore(span.firstChild, span);
+        }
+        span.parentNode?.removeChild(span);
+      }
+    });
   };
 
   const handleFontChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -108,18 +297,16 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
       const range = selection.getRangeAt(0);
       const span = document.createElement('span');
       span.style.fontFamily = fontFamily;
+      span.appendChild(range.extractContents());
       
-      try {
-        span.appendChild(range.extractContents());
-        range.insertNode(span);
-        
-        selection.removeAllRanges();
-        const newRange = document.createRange();
-        newRange.selectNodeContents(span);
-        selection.addRange(newRange);
-      } catch (e) {
-        document.execCommand('fontName', false, fontFamily);
-      }
+      removeNestedStyles(span, 'font-family');
+      range.insertNode(span);
+      cleanupNestedSpans(span);
+      
+      selection.removeAllRanges();
+      const newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      selection.addRange(newRange);
     }
     
     setCurrentFontFamily(fontFamily);
@@ -151,29 +338,15 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
       const span = document.createElement('span');
       span.style.fontSize = fontSize;
       
-      try {
-        span.appendChild(range.extractContents());
-        range.insertNode(span);
-        
-        const allSpans = span.querySelectorAll('span[style*="font-size"]');
-        allSpans.forEach(s => {
-          (s as HTMLElement).style.fontSize = fontSize;
-        });
-        
-        selection.removeAllRanges();
-        const newRange = document.createRange();
-        newRange.selectNodeContents(span);
-        selection.addRange(newRange);
-      } catch (e) {
-        document.execCommand('fontSize', false, '7');
-        const fontElements = editorRef.current?.querySelectorAll('font[size="7"]');
-        fontElements?.forEach((element) => {
-          const spanEl = document.createElement('span');
-          spanEl.style.fontSize = fontSize;
-          spanEl.innerHTML = element.innerHTML;
-          element.parentNode?.replaceChild(spanEl, element);
-        });
-      }
+      span.appendChild(range.extractContents());
+      removeNestedStyles(span, 'font-size');
+      range.insertNode(span);
+      cleanupNestedSpans(span);
+      
+      selection.removeAllRanges();
+      const newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      selection.addRange(newRange);
     }
     
     setCurrentFontSize(fontSize);
@@ -185,8 +358,29 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
 
   const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const color = e.target.value;
+    const selection = window.getSelection();
+    
+    if (!selection || selection.rangeCount === 0) return;
+    
     editorRef.current?.focus();
-    document.execCommand('foreColor', false, color);
+    
+    if (!selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.color = color;
+      
+      span.appendChild(range.extractContents());
+      removeNestedStyles(span, 'color');
+      range.insertNode(span);
+      cleanupNestedSpans(span);
+      
+      selection.removeAllRanges();
+      const newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      selection.addRange(newRange);
+    } else {
+      document.execCommand('foreColor', false, color);
+    }
     
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
@@ -256,6 +450,7 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
           <option value="Georgia">Georgia</option>
           <option value="Times New Roman">Times New Roman</option>
           <option value="Verdana">Verdana</option>
+          <option value="Courier New">Courier New</option>
           <option value="Courier New">Courier New</option>
           <option value="Comic Sans MS">Comic Sans MS</option>
           <option value="Tahoma">Tahoma</option>
@@ -329,6 +524,7 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
         contentEditable
         onInput={handleInput}
         onPaste={handlePaste}
+        onKeyDown={handleKeyDown}
         onClick={updateToolbar}
         onKeyUp={updateToolbar}
         className="p-3 focus:outline-none"
@@ -336,7 +532,7 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
           minHeight,
           fontFamily: 'Aptos, Arial, sans-serif',
           fontSize: '11pt',
-          lineHeight: 'normal',
+          lineHeight: '1.5',
           color: '#000000'
         }}
         data-placeholder={placeholder}
@@ -365,6 +561,19 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
         [contentEditable=true] a {
           color: #0000EE !important;
           text-decoration: underline !important;
+        }
+        [contentEditable=true] img {
+          max-width: 100%;
+          height: auto;
+        }
+        [contentEditable=true] table {
+          border-collapse: collapse;
+          margin: 10px 0;
+        }
+        [contentEditable=true] td,
+        [contentEditable=true] th {
+          border: 1px solid #ddd;
+          padding: 8px;
         }
       `}</style>
     </div>
