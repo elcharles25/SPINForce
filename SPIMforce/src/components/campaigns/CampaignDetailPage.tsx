@@ -120,6 +120,162 @@ export default function CampaignDetailPage() {
     }
   };
 
+const sendEmail = async (campaign: Campaign, emailNumber: number) => {
+  try {
+    if (campaign.emails_sent >= emailNumber) {
+      toast({ title: "Info", description: `Email ${emailNumber} ya fue enviado`, variant: "default" });
+      return;
+    }
+
+    const amSetting = await db.getSetting("account_manager");
+    const accountManagerName = amSetting?.value?.name || '';
+
+    const signatureSetting = await db.getSetting("email_signature");
+    let signature = '';
+    if (signatureSetting?.value) {
+      const value = signatureSetting.value;
+      signature = value?.signature || "";
+      signature = signature.trim();
+      if (signature.startsWith('"') && signature.endsWith('"')) {
+        signature = signature.slice(1, -1);
+      }
+      signature = signature.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\\//g, '/');
+    }
+
+    const template = await db.getTemplate(campaign.template_id);
+
+    if (!template) {
+      console.error('Template no encontrado. ID:', campaign.template_id);
+      throw new Error('Template not found');
+    }
+
+    const currentYear = new Date().getFullYear().toString();
+    const nextYear = (new Date().getFullYear() + 1).toString();
+
+    // ⭐ PRIMERO: Hacer todas las sustituciones de variables en subject y body
+    let subject = template[`email_${emailNumber}_subject`];
+    subject = subject.replace(/{{Nombre}}/g, campaign.contacts.first_name || '');
+    subject = subject.replace(/{{nombre}}/g, campaign.contacts.first_name || '');
+    subject = subject.replace(/{{ano}}/g, currentYear);
+    subject = subject.replace(/{{año}}/g, currentYear);
+    subject = subject.replace(/{{añoSiguiente}}/g, nextYear);
+    subject = subject.replace(/{{anoSiguiente}}/g, nextYear);
+    subject = subject.replace(/{{anosiguiente}}/g, nextYear);
+    subject = subject.replace(/{{añosiguiente}}/g, nextYear);
+    subject = subject.replace(/{{compania}}/g, campaign.contacts.organization || '');
+
+    let body = template[`email_${emailNumber}_html`];
+    body = body.replace(/{{Nombre}}/g, campaign.contacts.first_name || '');
+    body = body.replace(/{{nombre}}/g, campaign.contacts.first_name || '');
+    body = body.replace(/{{nombreAE}}/g, accountManagerName);
+    body = body.replace(/{{compania}}/g, campaign.contacts.organization || '');
+    body = body.replace(/{{ano}}/g, currentYear);
+    body = body.replace(/{{año}}/g, currentYear);
+    body = body.replace(/{{añoSiguiente}}/g, nextYear);
+    body = body.replace(/{{anoSiguiente}}/g, nextYear);
+    body = body.replace(/{{anosiguiente}}/g, nextYear);
+    body = body.replace(/{{añosiguiente}}/g, nextYear);
+    
+    if (signature) {
+      body = body + signature;
+    }
+
+    // ⭐ SEGUNDO: Buscar el último email enviado con el subject YA PROCESADO
+    console.log('🔍 Buscando email anterior con subject:', subject);
+    
+    const previousEmailResponse = await fetch('http://localhost:3002/api/outlook/find-last-sent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contactEmail: campaign.contacts.email,
+        subject: subject,  // ← Ahora subject ya tiene las variables sustituidas
+        daysBack: 60
+      })
+    });
+
+    const previousEmailData = await previousEmailResponse.json();
+    const replyToEmail = previousEmailData.emailInfo || null;
+
+    if (replyToEmail) {
+      console.log('✅ Email anterior encontrado, se hará REPLY');
+      console.log('   EntryID:', replyToEmail.EntryID);
+    } else {
+      console.log('ℹ️ No se encontró email anterior, se creará email NUEVO');
+    }
+
+    const attachmentsFromTemplate = template[`email_${emailNumber}_attachments`] || [];
+    console.log('📎 Attachments del template:', attachmentsFromTemplate);
+    
+    const processedAttachments = [];
+    
+    for (const attachment of attachmentsFromTemplate) {
+      try {
+        if (attachment.url) {
+          console.log(`📥 Descargando adjunto: ${attachment.name} desde ${attachment.url}`);
+          
+          const response = await fetch(attachment.url);
+          if (!response.ok) {
+            throw new Error(`Error descargando archivo: ${response.status}`);
+          }
+          
+          const blob = await response.blob();
+          
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onload = () => {
+              const result = reader.result as string;
+              const base64Data = result.split(',')[1];
+              resolve(base64Data);
+            };
+            reader.onerror = reject;
+          });
+          
+          processedAttachments.push({
+            filename: attachment.name,
+            content: base64
+          });
+          
+          console.log(`✅ Archivo convertido a base64: ${attachment.name}, tamaño: ${base64.length}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error procesando adjunto ${attachment.name}:`, error);
+        toast({ 
+          title: "Advertencia", 
+          description: `No se pudo adjuntar ${attachment.name}`,
+          variant: "destructive" 
+        });
+      }
+    }
+
+    console.log('📎 Adjuntos procesados:', processedAttachments.length);
+    console.log('📧 Enviando email con:');
+    console.log('   To:', campaign.contacts.email);
+    console.log('   Subject:', subject);
+
+    await fetch('http://localhost:3002/api/draft-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        to: campaign.contacts.email,
+        contactEmail: campaign.contacts.email,
+        subject,
+        body,
+        attachments: processedAttachments,
+        replyToEmail: replyToEmail
+      }),
+    });
+
+    await db.updateCampaign(campaign.id, { emails_sent: emailNumber });
+    console.log(`✅ Campaña ${campaign.id} actualizada: emails_sent = ${emailNumber}`);
+
+    toast({ title: "Éxito", description: `Email ${emailNumber} enviado` });
+    await loadData();
+  } catch (error) {
+    console.error('❌ Error completo:', error);
+    toast({ title: "Error", description: String(error), variant: "destructive" });
+  }
+};
   const handleEdit = () => {
     if (!campaign) return;
 
@@ -223,62 +379,34 @@ const handleSendPendingEmails = async () => {
   try {
     setIsSendingEmails(true);
     
-    const today = new Date();
-    const localDate = today.toLocaleDateString('en-CA');
-    let emailsSent = 0;
+    console.log('🔘 Botón "Enviar Pendientes Hoy" presionado');
+    
+    // ⭐ Eliminar throttle para permitir ejecución inmediata
+    localStorage.removeItem('autoCampaignLastRun');
+    
+    toast({
+      title: "Procesando",
+      description: "Enviando emails pendientes...",
+    });
 
-    console.log('=== DEBUG sendTodayEmails ===');
-    console.log('Campaign:', campaign.id);
-    console.log('Start campaign:', campaign.start_campaign);
-    console.log('Emails sent:', campaign.emails_sent);
-    console.log('Today:', localDate);
-
-    for (let i = 1; i <= 5; i++) {
-      const dateField = `email_${i}_date` as keyof Campaign;
-      const emailDate = campaign[dateField];
-      const emailDateOnly = emailDate ? String(emailDate).split('T')[0] : null;
-      console.log(`Email ${i}: date=${emailDateOnly}, sent=${campaign.emails_sent >= i}, shouldSend=${emailDateOnly && emailDateOnly <= localDate && campaign.emails_sent < i}`);
-
-      if (emailDateOnly && emailDateOnly <= localDate && campaign.emails_sent < i) {
-        console.log(`✓ Enviando email ${i}`);
-        
-        const response = await fetch('http://localhost:3001/api/campaigns/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            campaignId: campaign.id, 
-            emailNumber: i 
-          })
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Error al enviar email');
-        }
-
-        emailsSent++;
-        break;
-      }
-    }
-
-    if (emailsSent === 0) {
-      toast({
-        title: "Sin emails pendientes",
-        description: "No hay emails programados para hoy",
-      });
-    } else {
-      toast({
-        title: "Email enviado",
-        description: `Se envió ${emailsSent} email a la cola de envío`,
-      });
-      await loadData();
-    }
+    // ⭐ Disparar evento para que el hook ejecute
+    window.dispatchEvent(new CustomEvent('forceCampaignSend'));
+    
+    // ⭐ Esperar 4 segundos y recargar datos
+    await new Promise(resolve => setTimeout(resolve, 4000));
+    
+    await loadData();
+    
+    toast({
+      title: "Completado",
+      description: "Proceso finalizado",
+    });
 
   } catch (error: any) {
     console.error('Error enviando emails:', error);
     toast({
       title: "Error",
-      description: error.message || "No se pudo enviar el email",
+      description: error.message || "No se pudo procesar",
       variant: "destructive",
     });
   } finally {

@@ -1446,6 +1446,50 @@ app.post('/api/draft-email', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+/**
+ * POST /api/outlook/find-last-sent
+ * Busca el último email enviado a un contacto con un subject específico
+ * Body: { contactEmail: string, subject: string, daysBack: number }
+ */
+app.post('/api/outlook/find-last-sent', async (req, res) => {
+  try {
+    const { contactEmail, subject, daysBack = 60 } = req.body;
+
+    if (!contactEmail || !subject) {
+      return res.status(400).json({ error: 'contactEmail y subject son requeridos' });
+    }
+
+    console.log(`🔍 Buscando último email enviado:`);
+    console.log(`   To: ${contactEmail}`);
+    console.log(`   Subject: ${subject}`);
+
+    const emailInfo = await findLastSentEmail(contactEmail, subject, daysBack);
+
+    if (emailInfo) {
+      res.json({
+        success: true,
+        found: true,
+        emailInfo
+      });
+    } else {
+      res.json({
+        success: true,
+        found: false,
+        emailInfo: null
+      });
+    }
+  } catch (error) {
+    console.error('Error buscando último email:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      found: false,
+      emailInfo: null
+    });
+  }
+});
+
+
   app.post('/api/draft-emails-batch', async (req, res) => {
     try {
       const { emails } = req.body;
@@ -3990,6 +4034,7 @@ app.post('/api/meetings/fix-invalid-dates', async (req, res) => {
       }
     }
     
+
     console.log(`\n📊 === RESUMEN DE CORRECCIÓN ===`);
     console.log(`   Total reuniones revisadas: ${totalMeetings}`);
     console.log(`   ✅ Fechas corregidas: ${fixedCount}`);

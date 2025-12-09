@@ -10,6 +10,9 @@ interface HtmlEditorProps {
 export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }: HtmlEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const colorInputRef = useRef<HTMLInputElement>(null);
+  
+  const [currentFontSize, setCurrentFontSize] = useState<string>('11pt');
+  const [currentFontFamily, setCurrentFontFamily] = useState<string>('Aptos');
 
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
@@ -17,48 +20,109 @@ export function HtmlEditor({ value, onChange, placeholder, minHeight = "300px" }
     }
   }, [value]);
 
+  const updateToolbar = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    let container = range.commonAncestorContainer;
+    
+    if (container.nodeType === 3) {
+      container = container.parentNode as Node;
+    }
+
+    if (container && container instanceof HTMLElement) {
+      const computedStyle = window.getComputedStyle(container);
+      let fontSize = computedStyle.fontSize;
+      
+      if (fontSize.endsWith('px')) {
+        const pxValue = parseFloat(fontSize);
+        const ptValue = Math.round(pxValue * 0.75);
+        fontSize = `${ptValue}pt`;
+      }
+      
+      setCurrentFontSize(fontSize);
+
+      let fontFamily = computedStyle.fontFamily;
+      fontFamily = fontFamily.replace(/['"]/g, '').split(',')[0].trim();
+      setCurrentFontFamily(fontFamily);
+    }
+  };
+
   const handleInput = () => {
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
     }
   };
 
-const handlePaste = (e: React.ClipboardEvent) => {
-  e.preventDefault();
-  
-  let html = e.clipboardData.getData('text/html');
-  
-  if (html) {
-    // Limpiar estilos de line-height de Outlook
-    html = html.replace(/line-height:\s*[^;"}]+;?/gi, '');
-    html = html.replace(/mso-line-height-rule:\s*[^;"}]+;?/gi, '');
+  const handleSelectionChange = () => {
+    updateToolbar();
+  };
+
+  useEffect(() => {
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, []);
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
     
-    // Forzar margin y padding a 0
-    html = html.replace(/margin:\s*[^;"}]+;?/gi, 'margin: 0;');
-    html = html.replace(/padding:\s*[^;"}]+;?/gi, 'padding: 0;');
+    let html = e.clipboardData.getData('text/html');
     
-    // Eliminar clases de Outlook (MsoNormal, etc) que tienen sus propios estilos
-    html = html.replace(/class=['"]\s*Mso[^'"]*['"]/gi, '');
-    html = html.replace(/class=\w+/gi, '');
+    if (html) {
+      html = html.replace(/line-height:\s*[^;"}]+;?/gi, '');
+      html = html.replace(/mso-line-height-rule:\s*[^;"}]+;?/gi, '');
+      html = html.replace(/margin:\s*[^;"}]+;?/gi, '');
+      html = html.replace(/padding:\s*[^;"}]+;?/gi, '');
+      html = html.replace(/class=['"]\s*Mso[^'"]*['"]/gi, '');
+      html = html.replace(/class=\w+/gi, '');
+      
+      document.execCommand('insertHTML', false, html);
+    } else {
+      const text = e.clipboardData.getData('text/plain');
+      const lines = text.split('\n').filter(line => line.trim() !== '');
+      const htmlText = lines.map(line => 
+        `<span style="font-family: Aptos, sans-serif; font-size: 11pt;">${line}</span>`
+      ).join('');
+      document.execCommand('insertHTML', false, htmlText);
+    }
     
-    document.execCommand('insertHTML', false, html);
-  } else {
-    const text = e.clipboardData.getData('text/plain');
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    const htmlText = lines.map(line => 
-      `<p style="margin: 0; padding: 0; font-family: Aptos, sans-serif; font-size: 11pt;">${line}</p>`
-    ).join('');
-    document.execCommand('insertHTML', false, htmlText);
-  }
-  
-  if (editorRef.current) {
-    onChange(editorRef.current.innerHTML);
-  }
-};
+    if (editorRef.current) {
+      onChange(editorRef.current.innerHTML);
+    }
+  };
+
   const handleFontChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const fontFamily = e.target.value;
+    const selection = window.getSelection();
+    
+    if (!selection || selection.rangeCount === 0) return;
+    
     editorRef.current?.focus();
-    document.execCommand('fontName', false, fontFamily);
+    
+    if (selection.isCollapsed) {
+      document.execCommand('fontName', false, fontFamily);
+    } else {
+      const range = selection.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.fontFamily = fontFamily;
+      
+      try {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        
+        selection.removeAllRanges();
+        const newRange = document.createRange();
+        newRange.selectNodeContents(span);
+        selection.addRange(newRange);
+      } catch (e) {
+        document.execCommand('fontName', false, fontFamily);
+      }
+    }
+    
+    setCurrentFontFamily(fontFamily);
     
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
@@ -67,16 +131,52 @@ const handlePaste = (e: React.ClipboardEvent) => {
 
   const handleFontSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const fontSize = e.target.value;
-    editorRef.current?.focus();
-    document.execCommand('fontSize', false, '7');
+    const selection = window.getSelection();
     
-    const fontElements = editorRef.current?.querySelectorAll('font[size="7"]');
-    fontElements?.forEach((element) => {
+    if (!selection || selection.rangeCount === 0) return;
+    
+    editorRef.current?.focus();
+    
+    if (selection.isCollapsed) {
+      document.execCommand('fontSize', false, '7');
+      const fontElements = editorRef.current?.querySelectorAll('font[size="7"]');
+      fontElements?.forEach((element) => {
+        const span = document.createElement('span');
+        span.style.fontSize = fontSize;
+        span.innerHTML = element.innerHTML;
+        element.parentNode?.replaceChild(span, element);
+      });
+    } else {
+      const range = selection.getRangeAt(0);
       const span = document.createElement('span');
       span.style.fontSize = fontSize;
-      span.innerHTML = element.innerHTML;
-      element.parentNode?.replaceChild(span, element);
-    });
+      
+      try {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        
+        const allSpans = span.querySelectorAll('span[style*="font-size"]');
+        allSpans.forEach(s => {
+          (s as HTMLElement).style.fontSize = fontSize;
+        });
+        
+        selection.removeAllRanges();
+        const newRange = document.createRange();
+        newRange.selectNodeContents(span);
+        selection.addRange(newRange);
+      } catch (e) {
+        document.execCommand('fontSize', false, '7');
+        const fontElements = editorRef.current?.querySelectorAll('font[size="7"]');
+        fontElements?.forEach((element) => {
+          const spanEl = document.createElement('span');
+          spanEl.style.fontSize = fontSize;
+          spanEl.innerHTML = element.innerHTML;
+          element.parentNode?.replaceChild(spanEl, element);
+        });
+      }
+    }
+    
+    setCurrentFontSize(fontSize);
     
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
@@ -147,30 +247,25 @@ const handlePaste = (e: React.ClipboardEvent) => {
       <div className="bg-muted p-2 border-b flex gap-1 flex-wrap items-center">
         <select 
           onChange={handleFontChange}
+          value={currentFontFamily}
           className="px-2 py-1 rounded text-sm border bg-background hover:bg-accent"
-          defaultValue=""
         >
-          <option value="" disabled>Fuente</option>
           <option value="Aptos">Aptos (Body)</option>
-          <option value="Arial, sans-serif">Arial</option>
-          <option value="Calibri, sans-serif">Calibri</option>
-          <option value="Georgia, serif">Georgia</option>
-          <option value="'Times New Roman', serif">Times New Roman</option>
-          <option value="Verdana, sans-serif">Verdana</option>
-          <option value="'Courier New', monospace">Courier New</option>
-          <option value="'Comic Sans MS', cursive">Comic Sans MS</option>
-          <option value="Tahoma, sans-serif">Tahoma</option>
+          <option value="Arial">Arial</option>
+          <option value="Calibri">Calibri</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Verdana">Verdana</option>
+          <option value="Courier New">Courier New</option>
+          <option value="Comic Sans MS">Comic Sans MS</option>
+          <option value="Tahoma">Tahoma</option>
         </select>
 
         <select 
           onChange={handleFontSizeChange}
+          value={currentFontSize}
           className="px-2 py-1 rounded text-sm border bg-background hover:bg-accent"
-          defaultValue=""
         >
-          <option value="" disabled>Tamaño</option>
-          <option value="2pt">2</option>
-          <option value="4pt">4</option>
-          <option value="6pt">6</option>
           <option value="8pt">8</option>
           <option value="9pt">9</option>
           <option value="10pt">10</option>
@@ -182,6 +277,10 @@ const handlePaste = (e: React.ClipboardEvent) => {
           <option value="20pt">20</option>
           <option value="22pt">22</option>
           <option value="24pt">24</option>
+          <option value="26pt">26</option>
+          <option value="28pt">28</option>
+          <option value="36pt">36</option>
+          <option value="48pt">48</option>
         </select>
 
         <div className="w-px bg-border mx-1" />
@@ -230,8 +329,16 @@ const handlePaste = (e: React.ClipboardEvent) => {
         contentEditable
         onInput={handleInput}
         onPaste={handlePaste}
+        onClick={updateToolbar}
+        onKeyUp={updateToolbar}
         className="p-3 focus:outline-none"
-        style={{ minHeight }}
+        style={{ 
+          minHeight,
+          fontFamily: 'Aptos, Arial, sans-serif',
+          fontSize: '11pt',
+          lineHeight: 'normal',
+          color: '#000000'
+        }}
         data-placeholder={placeholder}
       />
       <style>{`
@@ -242,8 +349,8 @@ const handlePaste = (e: React.ClipboardEvent) => {
         }
         [contentEditable=true] ul,
         [contentEditable=true] ol {
-          margin-left: 20px;
-          padding-left: 20px;
+          margin: 0 0 0 20px;
+          padding: 0 0 0 20px;
         }
         [contentEditable=true] ul {
           list-style-type: disc;
@@ -251,13 +358,14 @@ const handlePaste = (e: React.ClipboardEvent) => {
         [contentEditable=true] ol {
           list-style-type: decimal;
         }
-        [contentEditable=true] * {
-          line-height: 1.2 !important;
-        }    
+        [contentEditable=true] p {
+          margin: 0;
+          padding: 0;
+        }
         [contentEditable=true] a {
-        color: #0000EE !important;
-        text-decoration: underline !important;
-  }
+          color: #0000EE !important;
+          text-decoration: underline !important;
+        }
       `}</style>
     </div>
   );

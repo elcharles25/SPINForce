@@ -39,100 +39,143 @@ export function useAutoCampaignSender(intervalMs: number = 5 * 60 * 1000) {
   const [isSending, setIsSending] = useState(false);
   const runningRef = useRef(false); // barrera adicional de re-entrada
 
-  const sendEmail = async (campaign: Campaign, emailNumber: number) => {
+const sendEmail = async (campaign: Campaign, emailNumber: number) => {
+  try {
+    if (campaign.emails_sent >= emailNumber) {
+      console.log(`Email ${emailNumber} ya fue enviado para campaña ${campaign.id}`);
+      return;
+    }
+
+    const amSetting = await db.getSetting("account_manager");
+    const accountManagerName = amSetting?.value?.name || '';
+
+    const signatureSetting = await db.getSetting("email_signature");
+    let signature = '';
+    if (signatureSetting?.value) {
+      const value = signatureSetting.value as any;
+      signature = (value?.signature || "").trim();
+      if (signature.startsWith('"') && signature.endsWith('"')) {
+        signature = signature.slice(1, -1);
+      }
+      signature = signature.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\\//g, '/');
+    }
+
+    const template = await db.getTemplate(campaign.template_id);
+    if (!template) {
+      console.error('Template no encontrado. ID:', campaign.template_id);
+      throw new Error('Template not found');
+    }
+
+    const currentYear = new Date().getFullYear().toString();
+    const nextYear = (new Date().getFullYear() + 1).toString();
+
+    // ⭐ SUBJECT: Agregar TODAS las variables
+    let subject = template[`email_${emailNumber}_subject`];
+    subject = subject.replace(/{{Nombre}}/g, campaign.contacts.first_name || '');
+    subject = subject.replace(/{{nombre}}/g, campaign.contacts.first_name || '');
+    subject = subject.replace(/{{ano}}/g, currentYear);
+    subject = subject.replace(/{{año}}/g, currentYear);
+    subject = subject.replace(/{{añoSiguiente}}/g, nextYear);
+    subject = subject.replace(/{{anoSiguiente}}/g, nextYear);
+    subject = subject.replace(/{{anosiguiente}}/g, nextYear);
+    subject = subject.replace(/{{añosiguiente}}/g, nextYear);
+    subject = subject.replace(/{{compania}}/g, campaign.contacts.organization || '');
+
+    // ⭐ BODY: Agregar TODAS las variables
+    let body = template[`email_${emailNumber}_html`];
+    body = body.replace(/{{Nombre}}/g, campaign.contacts.first_name || '');
+    body = body.replace(/{{nombre}}/g, campaign.contacts.first_name || '');
+    body = body.replace(/{{nombreAE}}/g, accountManagerName);
+    body = body.replace(/{{compania}}/g, campaign.contacts.organization || '');
+    body = body.replace(/{{ano}}/g, currentYear);
+    body = body.replace(/{{año}}/g, currentYear);
+    body = body.replace(/{{añoSiguiente}}/g, nextYear);
+    body = body.replace(/{{anoSiguiente}}/g, nextYear);
+    body = body.replace(/{{anosiguiente}}/g, nextYear);
+    body = body.replace(/{{añosiguiente}}/g, nextYear);
+
+    if (signature) {
+      body = body + signature;
+    }
+
+    // ⭐ BUSCAR EMAIL ANTERIOR (después de procesar subject)
+    console.log('🔍 Buscando email anterior con subject:', subject);
+    
+    let replyToEmail = null;
     try {
-      if (campaign.emails_sent >= emailNumber) {
-        console.log(`Email ${emailNumber} ya fue enviado para campaña ${campaign.id}`);
-        return;
-      }
-
-      const amSetting = await db.getSetting("account_manager");
-      const accountManagerName = amSetting?.value?.name || '';
-
-      const signatureSetting = await db.getSetting("email_signature");
-      let signature = '';
-      if (signatureSetting?.value) {
-        const value = signatureSetting.value as any;
-        signature = (value?.signature || "").trim();
-        if (signature.startsWith('"') && signature.endsWith('"')) {
-          signature = signature.slice(1, -1);
-        }
-        signature = signature.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\\//g, '/');
-      }
-
-      const template = await db.getTemplate(campaign.template_id);
-      if (!template) {
-        console.error('Template no encontrado. ID:', campaign.template_id);
-        throw new Error('Template not found');
-      }
-
-      const currentYear = new Date().getFullYear().toString();
-      const nextYear = (new Date().getFullYear() + 1).toString();
-
-      let subject = template[`email_${emailNumber}_subject`];
-      subject = subject.replace(/{{Nombre}}/g, campaign.contacts.first_name || '');
-      subject = subject.replace(/{{ano}}/g, currentYear);
-      subject = subject.replace(/{{anoSiguiente}}/g, nextYear);
-      subject = subject.replace(/{{compania}}/g, campaign.contacts.organization || '');
-
-      let body = template[`email_${emailNumber}_html`];
-      body = body.replace(/{{Nombre}}/g, campaign.contacts.first_name || '');
-      body = body.replace(/{{nombreAE}}/g, accountManagerName);
-      body = body.replace(/{{compania}}/g, campaign.contacts.organization || '');
-      body = body.replace(/{{ano}}/g, currentYear);
-      body = body.replace(/{{anoSiguiente}}/g, nextYear);
-
-      if (signature) {
-        body = body + '<br/><br/>' + signature;
-      }
-
-      const attachmentsFromTemplate = template[`email_${emailNumber}_attachments`] || [];
-      const processedAttachments: { filename: string; content: string }[] = [];
-
-      for (const attachment of attachmentsFromTemplate) {
-        try {
-          if (attachment.url) {
-            const response = await fetch(attachment.url);
-            if (!response.ok) throw new Error(`Error descargando archivo: ${response.status}`);
-            const blob = await response.blob();
-
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.readAsDataURL(blob);
-              reader.onload = () => {
-                const result = reader.result as string;
-                const base64Data = result.split(',')[1];
-                resolve(base64Data);
-              };
-              reader.onerror = reject;
-            });
-
-            processedAttachments.push({ filename: attachment.name, content: base64 });
-          }
-        } catch (error) {
-          console.error(`Error procesando adjunto ${attachment.name}:`, error);
-        }
-      }
-
-      await fetch('http://localhost:3002/api/draft-email', {
+      const previousEmailResponse = await fetch('http://localhost:3002/api/outlook/find-last-sent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: campaign.contacts.email,
           contactEmail: campaign.contacts.email,
-          subject,
-          body,
-          attachments: processedAttachments
-        }),
+          subject: subject,
+          daysBack: 60
+        })
       });
 
-      await db.updateCampaign(campaign.id, { emails_sent: emailNumber });
-      console.log(`✅ Email ${emailNumber} enviado para ${campaign.contacts.first_name} ${campaign.contacts.last_name}`);
-    } catch (error) {
-      console.error('Error enviando email:', error);
-      throw error;
+      const previousEmailData = await previousEmailResponse.json();
+      replyToEmail = previousEmailData.emailInfo || null;
+
+      if (replyToEmail) {
+        console.log('✅ Email anterior encontrado, se hará REPLY');
+        console.log('   EntryID:', replyToEmail.EntryID);
+      } else {
+        console.log('ℹ️ No se encontró email anterior, se creará email NUEVO');
+      }
+    } catch (searchError) {
+      console.warn('⚠️ Error buscando email anterior:', searchError);
+      // Continuar sin reply
     }
-  };
+
+    const attachmentsFromTemplate = template[`email_${emailNumber}_attachments`] || [];
+    const processedAttachments: { filename: string; content: string }[] = [];
+
+    for (const attachment of attachmentsFromTemplate) {
+      try {
+        if (attachment.url) {
+          const response = await fetch(attachment.url);
+          if (!response.ok) throw new Error(`Error descargando archivo: ${response.status}`);
+          const blob = await response.blob();
+
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onload = () => {
+              const result = reader.result as string;
+              const base64Data = result.split(',')[1];
+              resolve(base64Data);
+            };
+            reader.onerror = reject;
+          });
+
+          processedAttachments.push({ filename: attachment.name, content: base64 });
+        }
+      } catch (error) {
+        console.error(`Error procesando adjunto ${attachment.name}:`, error);
+      }
+    }
+
+    // ⭐ AGREGAR replyToEmail al body
+    await fetch('http://localhost:3002/api/draft-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: campaign.contacts.email,
+        contactEmail: campaign.contacts.email,
+        subject,
+        body,
+        attachments: processedAttachments,
+        replyToEmail: replyToEmail  // ⭐ AGREGAR ESTO
+      }),
+    });
+
+    await db.updateCampaign(campaign.id, { emails_sent: emailNumber });
+    console.log(`✅ Email ${emailNumber} enviado para ${campaign.contacts.first_name} ${campaign.contacts.last_name}`);
+  } catch (error) {
+    console.error('Error enviando email:', error);
+    throw error;
+  }
+};
 
   const autoSendDailyEmails = async () => {
     // Evita solapamientos en esta pestaña
@@ -239,6 +282,13 @@ export function useAutoCampaignSender(intervalMs: number = 5 * 60 * 1000) {
       }
       autoSendDailyEmails();
     }, intervalMs);
+
+    const handleForceSend = () => {
+      console.log('🚀 Envío forzado solicitado desde CampaignDetailPage');
+      autoSendDailyEmails();
+    };
+
+    window.addEventListener('forceCampaignSend', handleForceSend);
 
     return () => clearInterval(id);
   }, [intervalMs]);
