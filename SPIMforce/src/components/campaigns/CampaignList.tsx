@@ -1233,82 +1233,74 @@ const sendEmail = async (campaign: Campaign, emailNumber: number) => {
     setBulkFormData(dates);
   };
 
-  const handleBulkSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!bulkFormData.gartner_role || !bulkFormData.template_id || bulkFormData.selected_contacts.length === 0) {
-      toast({
-        title: "Error",
-        description: "Por favor completa todos los campos y selecciona al menos un contacto",
-        variant: "destructive",
-      });
-      return;
+const handleBulkSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  if (!bulkFormData.gartner_role || !bulkFormData.template_id || bulkFormData.selected_contacts.length === 0) {
+    toast({
+      title: "Error",
+      description: "Por favor completa todos los campos y selecciona al menos un contacto",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  setIsCreating(true);
+  try {
+    const campaignsToCreate = bulkFormData.selected_contacts.map(contactId => ({
+      contact_id: contactId,
+      template_id: bulkFormData.template_id,
+      start_campaign: bulkFormData.start_campaign,
+      email_1_date: bulkFormData.email_1_date || null,
+      email_2_date: bulkFormData.email_2_date || null,
+      email_3_date: bulkFormData.email_3_date || null,
+      email_4_date: bulkFormData.email_4_date || null,
+      email_5_date: bulkFormData.email_5_date || null,
+      status: bulkFormData.start_campaign ? "activa" : "pendiente",
+    }));
+
+    const createdCampaigns: Campaign[] = [];
+    for (const campaign of campaignsToCreate) {
+      const newCampaign = await db.createCampaign(campaign);
+      createdCampaigns.push(newCampaign);
     }
 
-    try {
-      const campaignsToCreate = bulkFormData.selected_contacts.map(contactId => ({
-        contact_id: contactId,
-        template_id: bulkFormData.template_id,
-        start_campaign: bulkFormData.start_campaign,
-        email_1_date: bulkFormData.email_1_date || null,
-        email_2_date: bulkFormData.email_2_date || null,
-        email_3_date: bulkFormData.email_3_date || null,
-        email_4_date: bulkFormData.email_4_date || null,
-        email_5_date: bulkFormData.email_5_date || null,
-        status: bulkFormData.start_campaign ? "activa" : "pendiente",
-      }));
-
-      try {
-        const createdCampaigns: Campaign[] = [];
-        for (const campaign of campaignsToCreate) {
-          const newCampaign = await db.createCampaign(campaign);
-          createdCampaigns.push(newCampaign);
-        }
-
-        toast({
-          title: "Éxito",
-          description: `${campaignsToCreate.length} campañas creadas correctamente`,
-        });
-        
-        setIsBulkDialogOpen(false);
-        resetBulkForm();
-
-        setIsCreating(true);
-        const today = new Date().toLocaleDateString('en-CA');
-        if (bulkFormData.start_campaign && bulkFormData.email_1_date === today) {
-          console.log(`🚀 Enviando primer email a ${createdCampaigns.length} campañas creadas hoy`);
-          
-          for (const campaign of createdCampaigns) {
-            if (campaign && campaign.id) {
-              try {
-                await sendEmail(campaign as Campaign, 1);
-              } catch (emailError) {
-                console.error(`Error enviando email para campaña ${campaign.id}:`, emailError);
-              }
-            }
+    const today = new Date().toLocaleDateString('en-CA');
+    if (bulkFormData.start_campaign && bulkFormData.email_1_date === today) {
+      console.log(`🚀 Enviando primer email a ${createdCampaigns.length} campañas creadas hoy`);
+      
+      for (const campaign of createdCampaigns) {
+        if (campaign && campaign.id) {
+          try {
+            await sendEmail(campaign as Campaign, 1);
+          } catch (emailError) {
+            console.error(`Error enviando email para campaña ${campaign.id}:`, emailError);
           }
         }
-      } catch (error) {
-        console.error("Error creando campañas masivas:", error);
-        toast({
-          title: "Error",
-          description: "No se pudieron crear las campañas",
-          variant: "destructive"
-        });
       }
-
-      fetchCampaigns();
-    } catch (error) {
-      console.error("Error creando campañas:", error);
-      toast({
-        title: "Error",
-        description: "No se pudieron crear las campañas",
-        variant: "destructive",
-      });
-    } finally {
-      setIsCreating(false);
     }
-  };
+
+    await fetchCampaigns();
+
+    toast({
+      title: "Éxito",
+      description: `${campaignsToCreate.length} campañas creadas correctamente`,
+    });
+    
+    setIsBulkDialogOpen(false);
+    resetBulkForm();
+
+  } catch (error) {
+    console.error("Error creando campañas:", error);
+    toast({
+      title: "Error",
+      description: "No se pudieron crear las campañas",
+      variant: "destructive",
+    });
+  } finally {
+    setIsCreating(false);
+  }
+};
 
   const resetBulkForm = () => {
     setBulkFormData({
@@ -1698,7 +1690,7 @@ const sendEmail = async (campaign: Campaign, emailNumber: number) => {
                 Nueva Campaña Masiva
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
               <DialogHeader>
                 <DialogTitle>Crear Campaña Masiva</DialogTitle>
               </DialogHeader>
@@ -1935,8 +1927,11 @@ const sendEmail = async (campaign: Campaign, emailNumber: number) => {
                   </Button>
                   <Button 
                     type="submit"
+                    disabled={isCreating}
                     className="rounded-full shadow-sm hover:shadow-md transition-shadow bg-indigo-500 hover:bg-indigo-600">
-                    Crear {bulkFormData.selected_contacts.length} Campaña{bulkFormData.selected_contacts.length !== 1 ? 's' : ''}
+                    {isCreating 
+                      ? "Creando campañas..." 
+                      : `Crear ${bulkFormData.selected_contacts.length} Campaña${bulkFormData.selected_contacts.length !== 1 ? 's' : ''}`}
                   </Button>
                 </div>
               </form>
